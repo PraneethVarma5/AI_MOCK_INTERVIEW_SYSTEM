@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Example Results | InterviewAI</title>
+    <meta name="description" content="See a sample AI mock interview result — scores, feedback, and ideal answers.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+
+    <div class="container">
+
+        <!-- Nav -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px;">
+            <a href="index.html" style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem; font-weight: 600; transition: color 0.2s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='var(--text-secondary)'">
+                ← Back to Home
+            </a>
+            <span class="hero-badge">Sample Result</span>
+        </div>
+
+        <!-- Header -->
+        <div style="text-align: center; margin-bottom: 40px;">
+            <h1 style="font-size: 2.5rem; font-weight: 800; margin-bottom: 12px; background: linear-gradient(135deg, #fff 0%, #7c4dff 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">🎉 Example Interview Results</h1>
+            <p style="color: var(--text-secondary); font-size: 1rem; max-width: 500px; margin: 0 auto; line-height: 1.6;">
+                This is what a completed AI mock interview looks like. High-quality, personalized feedback to sharpen your answers.
+            </p>
+        </div>
+
+        <!-- Score Summary -->
+        <div class="card" style="text-align: center; margin-bottom: 24px;">
+            <div class="score-circle" style="border-color: var(--success);">8.0</div>
+            <h2 style="margin-bottom: 8px;">Overall Performance</h2>
+            <p style="color: var(--text-secondary);">Excellent readiness for a Mid-Level Software Engineer role.</p>
+
+            <div class="stats-grid" style="margin-top: 28px;">
+                <div class="stat-card">
+                    <span class="stat-number">2</span>
+                    <span class="stat-label">Questions Answered</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" style="color: var(--success)">2</span>
+                    <span class="stat-label">Strong Answers (7+)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Question Breakdown Header -->
+        <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em;">Question Breakdown</h3>
+
+        <!-- Question 1 -->
+        <div class="card result-card">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 16px;">
+                <div style="flex: 1;">
+                    <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+                        <span class="question-tag tag-technical">Technical</span>
+                        <span class="diff-badge diff-medium">Medium</span>
+                    </div>
+                    <h3 style="font-size: 1rem; line-height: 1.4;">
+                        Explain the difference between <code>useMemo</code> and <code>useCallback</code> in React.
+                    </h3>
+                </div>
+                <span class="result-score" style="color: var(--success);">9/10</span>
+            </div>
+
+            <div class="feedback-section">
+                <div class="answer-block">
+                    <h4>Your Answer</h4>
+                    <p style="color: var(--text-secondary); font-style: italic; margin-bottom: 15px;">
+                        "useMemo is used to memoize a computed value to avoid expensive recalculations on every render, while useCallback is used to memoize a function definition to prevent unnecessary re-renders of child components that depend on reference equality for props."
+                    </p>
+                </div>
+                <div class="result-grid">
+                    <div class="result-col feedback-col">
+                        <h4>Feedback</h4>
+                        <p>Excellent explanation. You clearly distinguished between memoizing values vs. functions and showed strong React knowledge.</p>
+                    </div>
+                    <div class="result-col improvements-col">
+                        <h4>Key Improvements</h4>
+                        <p>You could mention that <code>useCallback(fn, deps)</code> is equivalent to <code>useMemo(() => fn, deps)</code>.</p>
+                    </div>
+                </div>
+                <div class="ideal-answer-block">
+                    <h4 style="color: var(--accent-color);">💡 Ideal Answer</h4>
+                    <p>useMemo returns a memoized value. useCallback returns a memoized version of a callback that only changes if one of the dependencies has changed, preventing unnecessary child re-renders.</p>
+                </div>
+                <div style="margin-top: 12px;">
+                    <h4 style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px;">Missing Keywords</h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        <span class="keyword-tag">memoization</span>
+                        <span class="keyword-tag">dependencies array</span>
+                        <span class="keyword-tag">reference equality</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Question 2 -->
+        <div class="card result-card">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 16px;">
+                <div style="flex: 1;">
+                    <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+                        <span class="question-tag tag-behavioral">Behavioral</span>
+                        <span class="diff-badge diff-easy">Easy</span>
+                    </div>
+                    <h3 style="font-size: 1rem; line-height: 1.4;">Tell me about a time you had a conflict with a coworker.</h3>
+                </div>
+                <span class="result-score" style="color: #ffc107;">7/10</span>
+            </div>
+
+            <div class="feedback-section">
+                <div class="answer-block">
+                    <h4>Your Answer</h4>
+                    <p style="color: var(--text-secondary); font-style: italic; margin-bottom: 15px;">
+                        "We disagreed on the architecture of a new feature. I decided to listen to their point of view, and we eventually found a middle ground that satisfied both our requirements."
+                    </p>
+                </div>
+                <div class="result-grid">
+                    <div class="result-col feedback-col">
+                        <h4>Feedback</h4>
+                        <p>Good use of the STAR framework. You showed emotional intelligence and a collaborative mindset, though a bit brief on specifics.</p>
+                    </div>
+                    <div class="result-col improvements-col">
+                        <h4>Key Improvements</h4>
+                        <p>Be more specific about what the "middle ground" was and the positive impact it had on the project's outcome.</p>
+                    </div>
+                </div>
+                <div class="ideal-answer-block">
+                    <h4 style="color: var(--accent-color);">💡 Ideal Answer</h4>
+                    <p>Focus on active listening, data-driven decision making, and the successful resolution that benefited the team's goals and timelines.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTA Buttons -->
+        <div class="nav-controls" style="margin-top: 8px;">
+            <a href="interview.html" class="btn">Try It Yourself →</a>
+            <a href="index.html" class="btn btn-secondary" style="text-align: center; padding: 15px;">← Back Home</a>
+        </div>
+
+    </div>
+</body>
+
+</html>

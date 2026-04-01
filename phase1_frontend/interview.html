@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InterviewAI | Start Your Mock Interview</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+    <style>
+        /* ── MODE SELECTION ── */
+        .mode-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-top: 8px;
+        }
+        .mode-card {
+            background: var(--card-bg);
+            border: 1.5px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 28px 20px;
+            cursor: pointer;
+            transition: border-color 0.25s, transform 0.2s, background 0.25s;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .mode-card:hover {
+            border-color: var(--accent-color);
+            transform: translateY(-3px);
+            background: rgba(124, 77, 255, 0.07);
+        }
+        .mode-icon {
+            font-size: 2.4rem;
+            display: block;
+            margin-bottom: 12px;
+        }
+        .mode-card h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .mode-card p {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .mode-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(124, 77, 255, 0.2);
+            color: #9c6bff;
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        /* ── MODAL / DIALOG ── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.72);
+            backdrop-filter: blur(6px);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+        .modal-box {
+            background: #0f0f18;
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 36px;
+            max-width: 520px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: translateY(20px);
+            transition: transform 0.25s;
+        }
+        .modal-overlay.active .modal-box {
+            transform: translateY(0);
+        }
+        .modal-title {
+            font-size: 1.4rem;
+            font-weight: 800;
+            margin-bottom: 6px;
+        }
+        .modal-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+            margin-bottom: 28px;
+            line-height: 1.5;
+        }
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.4rem;
+            cursor: pointer;
+            line-height: 1;
+            padding: 4px;
+        }
+        .modal-box { position: relative; }
+
+        /* ── ROLE DROPDOWN ── */
+        .role-select {
+            width: 100%;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            color: white;
+            font-size: 0.95rem;
+            padding: 12px 14px;
+            margin-bottom: 20px;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b0b0b0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .role-select:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+        .role-select option {
+            background: #151520;
+        }
+
+        /* ── SECTION HEADER IN MODAL ── */
+        .modal-section-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="error-toast" class="toast toast-error hidden"></div>
+    <div id="success-toast" class="toast toast-success hidden"></div>
+
+    <!-- ── MODAL: HR Practice ── -->
+    <div class="modal-overlay" id="modal-hr">
+        <div class="modal-box">
+            <button class="modal-close" onclick="closeModal('modal-hr')">✕</button>
+            <div class="modal-title">🎯 HR / Behavioral Practice</div>
+            <p class="modal-subtitle">Sharpen your soft skills with curated behavioral questions from our database — no resume needed.</p>
+
+            <span class="modal-section-label">Number of Questions</span>
+            <input type="number" id="hr-count" min="1" max="20" value="5" style="margin-bottom: 6px;">
+            <input type="range" id="hr-range" min="1" max="20" value="5" class="range-slider" style="margin-bottom: 20px;">
+
+            <span class="modal-section-label">Difficulty Level</span>
+            <div class="difficulty-pills" id="hr-difficulty-pills" style="margin-bottom: 20px;">
+                <button class="difficulty-pill active" data-value="easy">Easy</button>
+                <button class="difficulty-pill" data-value="medium">Medium</button>
+                <button class="difficulty-pill" data-value="hard">Hard</button>
+                <button class="difficulty-pill" data-value="mixed">Mixed</button>
+            </div>
+
+            <div class="toggle-wrapper" style="margin-bottom: 20px;">
+                <div>
+                    <span style="font-weight: 600; display: block;">Enable Timer</span>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">2 min per question</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="hr-timer">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="toggle-wrapper" style="margin-bottom: 28px;">
+                <div>
+                    <span style="font-weight: 600; display: block;">Enable Voice Mode</span>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">Hear questions & speak answers</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="hr-voice">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <button class="btn" onclick="startHRInterview()">Start HR Practice →</button>
+        </div>
+    </div>
+
+    <!-- ── MODAL: Role-Based Practice ── -->
+    <div class="modal-overlay" id="modal-role">
+        <div class="modal-box">
+            <button class="modal-close" onclick="closeModal('modal-role')">✕</button>
+            <div class="modal-title">💼 Practice by Role</div>
+            <p class="modal-subtitle">Pick your target role and get curated technical questions from our database — instantly, no resume needed.</p>
+
+            <span class="modal-section-label">Select Role</span>
+            <select class="role-select" id="role-select">
+                <option value="">Loading roles…</option>
+            </select>
+
+            <span class="modal-section-label">Number of Questions</span>
+            <input type="number" id="role-count" min="1" max="20" value="5" style="margin-bottom: 6px;">
+            <input type="range" id="role-range" min="1" max="20" value="5" class="range-slider" style="margin-bottom: 20px;">
+
+            <span class="modal-section-label">Difficulty Level</span>
+            <div class="difficulty-pills" id="role-difficulty-pills" style="margin-bottom: 20px;">
+                <button class="difficulty-pill" data-value="easy">Easy</button>
+                <button class="difficulty-pill" data-value="medium">Medium</button>
+                <button class="difficulty-pill" data-value="hard">Hard</button>
+                <button class="difficulty-pill active" data-value="mixed">Mixed</button>
+            </div>
+
+            <div class="toggle-wrapper" style="margin-bottom: 20px;">
+                <div>
+                    <span style="font-weight: 600; display: block;">Enable Timer</span>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">2 min per question</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="role-timer">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="toggle-wrapper" style="margin-bottom: 28px;">
+                <div>
+                    <span style="font-weight: 600; display: block;">Enable Voice Mode</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="role-voice">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <button class="btn" onclick="startRoleInterview()">Start Role Practice →</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>InterviewAI.</h1>
+            <p>Elevate your career with AI-powered mock interviews.</p>
+        </header>
+
+        <!-- ── STEP 0: MODE SELECTION ──────────────────────────── -->
+        <div id="step-mode" class="card step-content">
+            <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 6px;">Choose Your Practice Mode</h2>
+            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 24px;">Select how you want to prepare for your interview.</p>
+
+            <div class="mode-grid">
+                <div class="mode-card" onclick="openModal('modal-hr')">
+                    <span class="mode-badge">No Resume</span>
+                    <span class="mode-icon">🎯</span>
+                    <h3>HR / Behavioral</h3>
+                    <p>Practice common HR and behavioral questions with instant AI feedback.</p>
+                </div>
+
+                <div class="mode-card" onclick="showSetupStep()">
+                    <span class="mode-badge">Full AI</span>
+                    <span class="mode-icon">📄</span>
+                    <h3>Resume + JD</h3>
+                    <p>Upload your resume and job description for a fully personalized interview.</p>
+                </div>
+
+                <div class="mode-card" onclick="openModal('modal-role')">
+                    <span class="mode-badge">No Resume</span>
+                    <span class="mode-icon">💼</span>
+                    <h3>Practice by Role</h3>
+                    <p>Pick your target role and get curated technical questions from our database.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── STEP 1: SETUP (Resume+JD mode) ─────────────────── -->
+        <div id="step-setup" class="card step-content hidden">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+                <button onclick="showModeStep()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:0.9rem;font-weight:600;padding:0;">← Back</button>
+                <h2 style="font-size: 1.1rem; font-weight: 700;">📄 Resume + Job Description</h2>
+            </div>
+
+            <!-- <div style="margin-bottom: 24px;">
+                <label class="form-label" for="job-role-input">Job Role / Job Title</label>
+                <input type="text" id="job-role-input" placeholder="e.g. Software Engineer, Product Manager" autocomplete="off">
+                <div id="job-role-error" style="color: rgba(255,80,80,0.9); font-size:0.85rem; max-height:0; opacity:0; overflow:hidden; transition: max-height 0.3s, opacity 0.3s;">
+                    ⚠️ Please enter a job role to start the interview.
+                </div>
+            </div> -->
+
+            <div style="margin-bottom: 24px;">
+                <label class="form-label">Job Description <span class="optional-tag">Optional</span></label>
+                <textarea id="jd-input" placeholder="Paste the job description here to tailor your interview..." rows="3"></textarea>
+            </div>
+
+            <div style="margin-bottom: 24px;">
+                <label class="form-label">Difficulty Level</label>
+                <div class="difficulty-pills">
+                    <button class="difficulty-pill" data-value="easy">Easy</button>
+                    <button class="difficulty-pill" data-value="medium">Medium</button>
+                    <button class="difficulty-pill" data-value="hard">Hard</button>
+                    <button class="difficulty-pill active" data-value="mixed">Mixed</button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <label class="form-label" style="margin: 0;">Number of Questions</label>
+                    <label class="ai-toggle-label">
+                        <input type="checkbox" id="ai-optimized-toggle">
+                        <span class="ai-toggle-badge">✨ AI Optimized</span>
+                    </label>
+                </div>
+                <div id="manual-count-controls">
+                    <input type="number" id="count-input" min="1" max="20" value="5" style="margin-bottom: 10px;">
+                    <input type="range" id="count-range" min="1" max="20" value="5" class="range-slider">
+                </div>
+            </div>
+
+            <div class="toggle-wrapper">
+                <div>
+                    <span style="font-weight: 600; display: block;">Enable Voice Mode</span>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">Hear questions and speak answers</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="voice-toggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="toggle-wrapper" style="margin-bottom: 28px;">
+                <div>
+                    <span style="font-weight: 600; display: block;">Enable Timer</span>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">Limit time per question (2 min)</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="timer-toggle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div id="drop-zone" class="file-upload">
+                <div id="file-info">
+                    <svg style="width:48px;height:48px;color:var(--accent-color);margin-bottom:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    <p>Click or drag your resume here</p>
+                    <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">PDF, DOCX, or TXT (Max 10 MB)</p>
+                </div>
+                <input type="file" id="resume-upload" hidden accept=".pdf,.docx,.txt">
+            </div>
+
+            <button id="start-btn" class="btn">Start Interview</button>
+        </div>
+
+        <!-- ── STEP 2: LOADING ──────────────────────────────────── -->
+        <div id="step-loading" class="card step-content hidden" style="text-align:center;padding:60px 40px;">
+            <span class="loader"></span>
+            <h2 id="loading-text">Generating your questions…</h2>
+            <p style="color:var(--text-secondary);margin-top:10px;">Our AI is tailoring the perfect interview for you.</p>
+        </div>
+
+        <!-- ── STEP 3: INTERVIEW ────────────────────────────────── -->
+        <div id="step-interview" class="card step-content hidden">
+            <div class="progress-bar" style="margin-bottom:12px;">
+                <div id="progress-fill" class="progress-inner"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+                <span id="q-counter" style="font-size:0.85rem;color:var(--text-secondary);font-weight:600;">Question 1 of 5</span>
+                <span id="timer-display" style="font-weight:800;color:var(--accent-color);display:none;">02:00</span>
+            </div>
+
+            <div class="question-container">
+                <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+                    <span id="q-tag" class="question-tag tag-technical">Technical</span>
+                    <span id="q-diff-badge" class="diff-badge diff-medium">Medium</span>
+                </div>
+                <h2 id="current-question" style="line-height:1.4;margin-bottom:20px;">Loading question…</h2>
+
+                <div id="voice-controls" style="display:none;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+                    <button id="read-question-btn" class="btn btn-secondary" style="flex:0 0 auto;padding:10px 16px;">🔊 Read Question</button>
+                    <button id="record-answer-btn" class="btn btn-secondary" style="flex:1;padding:10px;">🎤 Start Recording</button>
+                </div>
+            </div>
+
+            <div style="position:relative;">
+                <textarea id="answer-input" placeholder="Type your answer here…" rows="8" style="margin-bottom:8px;"></textarea>
+                <div id="editor-badge" class="hidden" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.06);border:1px solid var(--glass-border);padding:3px 10px;border-radius:6px;font-size:0.7rem;font-weight:700;text-transform:uppercase;color:var(--text-secondary);pointer-events:none;">Editor Mode</div>
+            </div>
+            <p id="char-count" style="font-size:0.8rem;color:var(--text-secondary);text-align:right;margin-bottom:24px;">0 characters</p>
+
+            <div class="nav-controls">
+                <button id="prev-btn" class="btn btn-secondary" style="width:auto;padding:15px 28px;" disabled>← Previous</button>
+                <button id="submit-answer-btn" class="btn" style="flex:1;">Next Question →</button>
+            </div>
+        </div>
+
+        <!-- ── STEP 4: EVALUATING ───────────────────────────────── -->
+        <div id="step-evaluating" class="card step-content hidden" style="text-align:center;padding:60px 40px;">
+            <span class="loader"></span>
+            <h2>Evaluating your answers…</h2>
+            <p style="color:var(--text-secondary);margin-top:10px;">All responses are currently under careful evaluation—just a little longer to go, you're almost there! </p>
+        </div>
+
+        <!-- ── STEP 5: RESULTS ──────────────────────────────────── -->
+        <div id="step-results" class="card step-content hidden">
+            <div style="text-align:center;margin-bottom:32px;">
+                <div class="score-circle"><span id="avg-score">0</span></div>
+                <h2>Interview Complete! 🎉</h2>
+                <p id="results-mode-label" style="color:var(--text-secondary);margin-top:8px;">Here is how you performed.</p>
+            </div>
+
+            <div id="stats-grid" class="stats-grid" style="margin-bottom:32px;"></div>
+            <div id="resume-match-container" style="display:none;margin-bottom:32px;"></div>
+            <div id="feedback-list"></div>
+
+            <div class="nav-controls" style="margin-top:16px;">
+                <button onclick="location.reload()" class="btn">Try Another Mode</button>
+                <a href="index.html" class="btn btn-secondary" style="text-align:center;padding:15px;">🏠 Go to Home</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+
+</html>
