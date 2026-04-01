@@ -115,8 +115,8 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:5501",
         "http://localhost:5501",
-        # Add your deployed frontend URL later, e.g.
-        # "https://your-frontend.vercel.app",
+        "https://ai-mock-interview-system-project.vercel.app"
+       
     ],
     allow_credentials=True,
     allow_methods=["*"],
