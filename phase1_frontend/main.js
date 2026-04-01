@@ -2,7 +2,7 @@
 const API_BASE =
     window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
         ? 'http://127.0.0.1:8000'
-        : 'https://mock-interview-ai-backend.onrender.com';
+        : 'https://ai-mock-interview-api-9sj4.onrender.com';
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let uploadInProgress = false;
