@@ -1,6 +1,6 @@
 ﻿fastapi
 uvicorn[standard]
-pydantic
+pydantic[email]
 python-dotenv
 python-multipart
 google-generativeai
@@ -9,3 +9,4 @@ pypdf
 python-docx
 scikit-learn
 numpy
+supabase

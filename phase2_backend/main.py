@@ -1,11 +1,17 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+"""
+main.py — InterviewAI Backend (Supabase edition)
+Replaces all SQLite usage with Supabase.
+Adds: auth middleware, experience level support, session persistence.
+"""
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Depends
 from pydantic import BaseModel
+from datetime import datetime, timezone
 import sys
 import os
 import shutil
 import hashlib
 import json
-import sqlite3
+import time
 from typing import List, Optional
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,39 +24,28 @@ try:
 except Exception as e:
     print(f"Warning: Could not import QuestionGenerator: {e}")
     QuestionGenerator = None
+
 import uvicorn
 
-
-# Force UTF-8 output on Windows
+# Force UTF-8
 if sys.stdout.encoding != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 if sys.stderr.encoding != 'utf-8':
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-# Load .env from current dir and parent dir
 load_dotenv()
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=False)
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"), override=False)
+_dir = os.path.dirname(__file__)
+load_dotenv(dotenv_path=os.path.join(_dir, ".env"), override=False)
+load_dotenv(dotenv_path=os.path.join(_dir, "..", ".env"), override=False)
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "interview.db")
-CACHE_FILE = os.path.join(os.path.dirname(__file__), "question_cache.json")
+CACHE_FILE = os.path.join(_dir, "question_cache.json")
 
-
-# ── DATABASE HELPER ───────────────────────────────────────────────────────────
-def get_db():
-    if not os.path.exists(DB_PATH):
-        raise HTTPException(
-            status_code=500,
-            detail="Database not found. Please run: python db_init.py"
-        )
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
+# ── SUPABASE ──────────────────────────────────────────────────────────────────
+from supabase_client import get_supabase_admin
 
 # ── CACHE HELPERS ─────────────────────────────────────────────────────────────
-def get_cache_key(resume_text, num_questions, difficulty, job_description, auto_select_count):
-    content = f"{resume_text[:5000]}|{num_questions}|{difficulty}|{job_description[:3000]}|{auto_select_count}"
+def get_cache_key(resume_text, num_questions, difficulty, job_description, auto_select_count, experience_level="experienced", experience_years=""):
+    content = f"{resume_text[:5000]}|{num_questions}|{difficulty}|{job_description[:3000]}|{auto_select_count}|{experience_level}|{experience_years}"
     return hashlib.md5(content.encode("utf-8")).hexdigest()
 
 def read_cache():
@@ -66,9 +61,23 @@ def write_cache(cache):
     with open(CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(cache, f, indent=2, ensure_ascii=False)
 
-
-# ── RESUME PARSER IMPORT ──────────────────────────────────────────────────────
+# ── RESUME PARSER ──────────────────────────────────────────────────────────────
 from resume_parser import parse_resume
+
+# ── AUTH HELPER ───────────────────────────────────────────────────────────────
+def get_user_id_from_request(request: Request) -> Optional[str]:
+    """Extract Supabase user ID from Authorization header. Returns None for guests."""
+    auth = request.headers.get("Authorization", "")
+    token = auth.replace("Bearer ", "").strip()
+    if not token:
+        return None
+    try:
+        from supabase_client import get_supabase
+        sb = get_supabase()
+        user = sb.auth.get_user(token)
+        return str(user.user.id) if user and user.user else None
+    except Exception:
+        return None
 
 # ── PYDANTIC MODELS ───────────────────────────────────────────────────────────
 class QuestionRequest(BaseModel):
@@ -78,6 +87,8 @@ class QuestionRequest(BaseModel):
     num_questions: int = 5
     auto_select_count: bool = False
     force_refresh: bool = False
+    experience_level: str = "experienced"   # "fresher" | "experienced"
+    experience_years: str = ""              # "1", "2", "3-5", "5+" (only if experienced)
 
 class QuestionModel(BaseModel):
     id: int
@@ -100,7 +111,13 @@ class AnswerItem(BaseModel):
 
 class BatchEvaluateRequest(BaseModel):
     answers: List[AnswerItem]
-    mode: Optional[str] = "resume"  # resume | hr | role
+    mode: Optional[str] = "resume"
+    session_id: Optional[str] = None  # For saving results to Supabase
+
+class SaveSessionRequest(BaseModel):
+    session_id: str
+    overall_score: float
+    results: List[dict]
 
 
 # ── APP SETUP ─────────────────────────────────────────────────────────────────
@@ -116,33 +133,39 @@ app.add_middleware(
         "http://127.0.0.1:5501",
         "http://localhost:5501",
         "https://ai-mock-interview-system-project.vercel.app"
-       
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# Initialize globally
+
+# ── Mount auth and analytics routers ──────────────────────────────────────────
+from auth import router as auth_router
+from analytics import router as analytics_router
+app.include_router(auth_router)
+app.include_router(analytics_router)
+
+# ── Initialize evaluator and generator ────────────────────────────────────────
 if QuestionGenerator is not None:
     try:
         question_generator = QuestionGenerator()
     except Exception as e:
-        print(f"Warning: Failed to initialize QuestionGenerator: {e}")
+        print(f"Warning: QuestionGenerator init failed: {e}")
         question_generator = None
 else:
     question_generator = None
-    
+
 try:
     answer_evaluator = AnswerEvaluator()
 except Exception as e:
-    print(f"Warning: Failed to initialize AnswerEvaluator: {e}")
+    print(f"Warning: AnswerEvaluator init failed: {e}")
     answer_evaluator = None
 
 
 # ── BASIC ROUTES ──────────────────────────────────────────────────────────────
 @app.get("/")
 def read_root():
-    return {"message": "AI Mock Interview Backend is Running"}
+    return {"message": "AI Mock Interview Backend is Running (Supabase edition)"}
 
 @app.get("/health")
 def health_check():
@@ -150,80 +173,46 @@ def health_check():
         os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or
         os.getenv("RECRUITER_API_KEYS") or os.getenv("GEMINI_API_KEYS")
     )
-    db_ok = os.path.exists(DB_PATH)
+    supabase_ok = bool(os.getenv("SUPABASE_URL") and os.getenv("SUPABASE_ANON_KEY"))
     return {
         "status": "ok",
         "question_generator_ready": question_generator is not None,
         "answer_evaluator_ready": answer_evaluator is not None,
         "gemini_key_detected": gemini_present,
-        "database_ready": db_ok
+        "supabase_connected": supabase_ok
     }
 
 
-# ── DATABASE ROUTES ───────────────────────────────────────────────────────────
+# ── DATABASE ROUTES (now Supabase) ────────────────────────────────────────────
 @app.get("/db/roles")
 def get_available_roles():
-    """Return all roles that have questions in the database."""
     try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT DISTINCT role FROM role_questions ORDER BY role")
-        roles = [row["role"] for row in cur.fetchall()]
-        conn.close()
+        sb = get_supabase_admin()
+        res = sb.table("role_questions").select("role").execute()
+        roles = sorted(list(set(r["role"] for r in (res.data or []))))
         return {"roles": roles}
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/db/hr_questions")
 def get_hr_questions(num_questions: int = 5, difficulty: str = "mixed"):
-    """Fetch HR/behavioral questions from the database with fallback top-up if a difficulty bucket is short."""
     num_questions = max(1, min(num_questions, 20))
-
     try:
-        conn = get_db()
-        cur = conn.cursor()
+        sb = get_supabase_admin()
+        query = sb.table("hr_questions").select("*")
+        if difficulty != "mixed":
+            query = query.eq("difficulty", difficulty)
+        res = query.limit(num_questions * 3).execute()
+        rows = res.data or []
 
-        rows = []
-
-        if difficulty == "mixed":
-            cur.execute(
-                "SELECT * FROM hr_questions ORDER BY RANDOM() LIMIT ?",
-                (num_questions,)
-            )
-            rows = cur.fetchall()
-        else:
-            # First try exact difficulty
-            cur.execute(
-                "SELECT * FROM hr_questions WHERE difficulty = ? ORDER BY RANDOM() LIMIT ?",
-                (difficulty, num_questions)
-            )
-            primary_rows = cur.fetchall()
-            rows.extend(primary_rows)
-
-            # Top up from other difficulties if needed
-            remaining = num_questions - len(primary_rows)
-            if remaining > 0:
-                cur.execute(
-                    """
-                    SELECT * FROM hr_questions
-                    WHERE difficulty != ?
-                    AND id NOT IN ({})
-                    ORDER BY RANDOM()
-                    LIMIT ?
-                    """.format(",".join("?" for _ in primary_rows) if primary_rows else "0"),
-                    ([difficulty] + [row["id"] for row in primary_rows] + [remaining]) if primary_rows
-                    else [difficulty, remaining]
-                )
-                fallback_rows = cur.fetchall()
-                rows.extend(fallback_rows)
-
-        conn.close()
+        # Shuffle and pick
+        import random
+        random.shuffle(rows)
+        rows = rows[:num_questions]
 
         questions = []
-        for idx, row in enumerate(rows[:num_questions], start=1):
+        for idx, row in enumerate(rows, start=1):
             questions.append({
                 "id": idx,
                 "text": row["text"],
@@ -233,61 +222,48 @@ def get_hr_questions(num_questions: int = 5, difficulty: str = "mixed"):
                 "initial_code": ""
             })
 
-        return {"questions": questions}
+        # Top-up with other difficulties if needed
+        if len(questions) < num_questions and difficulty != "mixed":
+            remaining = num_questions - len(questions)
+            existing_ids = [r["id"] for r in rows]
+            res2 = sb.table("hr_questions").select("*") \
+                .not_.in_("id", existing_ids) \
+                .limit(remaining).execute()
+            for row in (res2.data or []):
+                questions.append({
+                    "id": len(questions) + 1,
+                    "text": row["text"],
+                    "type": row["type"],
+                    "difficulty": row["difficulty"],
+                    "context": "[HR] Behavioral competency question",
+                    "initial_code": ""
+                })
 
-    except HTTPException:
-        raise
+        return {"questions": questions}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/db/role_questions")
 def get_role_questions(role: str, num_questions: int = 5, difficulty: str = "mixed"):
-    """Fetch role-specific questions from the database with fallback top-up if a difficulty bucket is short."""
     num_questions = max(1, min(num_questions, 20))
-
     try:
-        conn = get_db()
-        cur = conn.cursor()
+        sb = get_supabase_admin()
+        query = sb.table("role_questions").select("*").eq("role", role)
+        if difficulty != "mixed":
+            query = query.eq("difficulty", difficulty)
+        res = query.limit(num_questions * 3).execute()
+        rows = res.data or []
 
-        rows = []
+        if not rows:
+            raise HTTPException(status_code=404, detail=f"No questions found for role '{role}'")
 
-        if difficulty == "mixed":
-            cur.execute(
-                "SELECT * FROM role_questions WHERE role = ? ORDER BY RANDOM() LIMIT ?",
-                (role, num_questions)
-            )
-            rows = cur.fetchall()
-        else:
-            # First try exact difficulty
-            cur.execute(
-                "SELECT * FROM role_questions WHERE role = ? AND difficulty = ? ORDER BY RANDOM() LIMIT ?",
-                (role, difficulty, num_questions)
-            )
-            primary_rows = cur.fetchall()
-            rows.extend(primary_rows)
-
-            # Top up from other difficulties for same role
-            remaining = num_questions - len(primary_rows)
-            if remaining > 0:
-                cur.execute(
-                    """
-                    SELECT * FROM role_questions
-                    WHERE role = ?
-                    AND difficulty != ?
-                    AND id NOT IN ({})
-                    ORDER BY RANDOM()
-                    LIMIT ?
-                    """.format(",".join("?" for _ in primary_rows) if primary_rows else "0"),
-                    ([role, difficulty] + [row["id"] for row in primary_rows] + [remaining]) if primary_rows
-                    else [role, difficulty, remaining]
-                )
-                fallback_rows = cur.fetchall()
-                rows.extend(fallback_rows)
-
-        conn.close()
+        import random
+        random.shuffle(rows)
+        rows = rows[:num_questions]
 
         questions = []
-        for idx, row in enumerate(rows[:num_questions], start=1):
+        for idx, row in enumerate(rows, start=1):
             questions.append({
                 "id": idx,
                 "text": row["text"],
@@ -297,37 +273,117 @@ def get_role_questions(role: str, num_questions: int = 5, difficulty: str = "mix
                 "initial_code": ""
             })
 
-        if not questions:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No questions found for role '{role}'. Check available roles at /db/roles"
-            )
-
         return {"questions": questions}
-
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ── BATCH EVALUATE ROUTE ──────────────────────────────────────────────────────
+
+# ── SESSION MANAGEMENT ────────────────────────────────────────────────────────
+@app.post("/sessions/create")
+async def create_session(request: Request, data: dict):
+    """Create a new interview session and return session_id."""
+    user_id = get_user_id_from_request(request)
+    sb = get_supabase_admin()
+    try:
+        session_data = {
+            "user_id": user_id,
+            "mode": data.get("mode", "resume"),
+            "role": data.get("role"),
+            "difficulty": data.get("difficulty", "mixed"),
+            "experience_level": data.get("experience_level", "experienced"),
+            "experience_years": data.get("experience_years", ""),
+            "num_questions": data.get("num_questions", 5),
+            "status": "in_progress"
+        }
+        res = sb.table("sessions").insert(session_data).execute()
+        session = res.data[0] if res.data else {}
+        return {"session_id": session.get("id"), "session": session}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/sessions/{session_id}/complete")
+async def complete_session(session_id: str, request: Request, data: dict):
+    """Save evaluation results and mark session as completed."""
+    user_id = get_user_id_from_request(request)
+    sb = get_supabase_admin()
+    try:
+        results = data.get("results", [])
+        overall_score = data.get("overall_score", 0)
+        questions = data.get("questions", [])
+
+        # Save each answer
+        answers_to_insert = []
+        for i, result in enumerate(results):
+            q = questions[i] if i < len(questions) else {}
+            answers_to_insert.append({
+                "session_id": session_id,
+                "question_index": i,
+                "question_text": q.get("text", result.get("question", "")),
+                "question_type": q.get("type", "technical"),
+                "question_difficulty": q.get("difficulty", "medium"),
+                "user_answer": result.get("answer", ""),
+                "score": result.get("score"),
+                "feedback": result.get("feedback", ""),
+                "improvements": result.get("improvements", ""),
+                "ideal_answer": result.get("ideal_answer", ""),
+                "missing_keywords": result.get("missing_keywords", [])
+            })
+
+        if answers_to_insert:
+            sb.table("session_answers").insert(answers_to_insert).execute()
+
+        # Update session
+        
+        sb.table("sessions").update({
+        "overall_score": overall_score,
+        "status": "completed",
+        "completed_at": datetime.now(timezone.utc).isoformat()
+        }).eq("id", session_id).execute()
+
+        return {"message": "Session saved successfully", "session_id": session_id}
+    except Exception as e:
+        print(f"Session save error: {e}")
+        # Don't fail the user — saving is best-effort
+        return {"message": "Session partially saved", "error": str(e)}
+
+
+@app.get("/sessions/history")
+async def get_session_history(request: Request, limit: int = 20):
+    """Get session history for the current user."""
+    user_id = get_user_id_from_request(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    sb = get_supabase_admin()
+    try:
+        res = sb.table("sessions") \
+            .select("id, mode, role, difficulty, overall_score, created_at, status, num_questions") \
+            .eq("user_id", user_id) \
+            .eq("status", "completed") \
+            .order("created_at", desc=True) \
+            .limit(limit) \
+            .execute()
+        return {"sessions": res.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── BATCH EVALUATE ────────────────────────────────────────────────────────────
 @app.post("/batch_evaluate")
-def batch_evaluate_answers(request: BatchEvaluateRequest):
-    """
-    HR / Role -> always local hybrid evaluation (0 Gemini calls)
-    Resume    -> Gemini batch evaluation first, local hybrid fallback if Gemini fails
-    """
+async def batch_evaluate_answers(request: Request, req: BatchEvaluateRequest):
     try:
         if answer_evaluator is None:
             raise HTTPException(status_code=500, detail="Answer evaluator not initialized")
 
-        mode = (request.mode or "resume").lower()
+        mode = (req.mode or "resume").lower()
 
         if mode in ["hr", "role"]:
-            results = answer_evaluator.evaluate_local_batch(request.answers)
+            results = answer_evaluator.evaluate_local_batch(req.answers)
         else:
-            # Resume mode: batch_evaluate already contains Gemini -> local fallback
-            results = answer_evaluator.batch_evaluate(request.answers)
+            results = answer_evaluator.batch_evaluate(req.answers)
 
         return {"results": results}
 
@@ -335,16 +391,14 @@ def batch_evaluate_answers(request: BatchEvaluateRequest):
         raise
     except Exception as e:
         print(f"Batch evaluation failed: {e}")
-
-        # Final safety net: NEVER let frontend receive hard failure
         try:
-            fallback_results = answer_evaluator.evaluate_local_batch(request.answers)
+            fallback_results = answer_evaluator.evaluate_local_batch(req.answers)
             return {"results": fallback_results}
         except Exception as inner_e:
-            print(f"Final local fallback also failed: {inner_e}")
             raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
-                
-# ── RESUME UPLOAD ─────────────────────────────────────────────────────────────
+
+
+# ── RESUME UPLOAD ──────────────────────────────────────────────────────────────
 @app.post("/upload_resume")
 async def upload_resume(file: UploadFile = File(...), job_role: str = Form("")):
     suffix = os.path.splitext(file.filename)[1] if file.filename else ".tmp"
@@ -356,7 +410,7 @@ async def upload_resume(file: UploadFile = File(...), job_role: str = Form("")):
 
         data = parse_resume(temp_file, job_role=job_role)
         safe_text = data.text[:300].encode("utf-8", "replace").decode("utf-8")
-        print(f"\n--- EXTRACTED RESUME TEXT (FIRST 300 CHARS) ---\n{safe_text}\n---\n")
+        print(f"\n--- RESUME TEXT (FIRST 300) ---\n{safe_text}\n---\n")
 
         return {
             "filename": file.filename,
@@ -378,57 +432,49 @@ async def upload_resume(file: UploadFile = File(...), job_role: str = Form("")):
 def generate_questions(request: QuestionRequest):
     """
     Resume + optional JD mode.
-    No manual/default job role.
-    Gemini infers the likely role from resume skills/projects/experience and optional JD.
+    Now supports experience_level (fresher/experienced) and experience_years.
     """
     try:
         if not request.resume_text or not request.resume_text.strip():
             raise HTTPException(status_code=400, detail="Resume text is required.")
 
-        # Clamp question count for safety
         request.num_questions = max(3, min(request.num_questions, 20))
 
-        # Cache key WITHOUT role
         cache_key = get_cache_key(
             request.resume_text,
             request.num_questions,
             request.difficulty,
             request.job_description,
-            request.auto_select_count
+            request.auto_select_count,
+            request.experience_level,
+            request.experience_years
         )
 
-        # Use cache unless force refresh
         if not request.force_refresh:
             cache = read_cache()
             if cache_key in cache:
-                cached_questions = cache[cache_key]
-                return {"questions": cached_questions}
+                return {"questions": cache[cache_key]}
 
-        # If Gemini generator is unavailable, use generic fallback (no role)
         if question_generator is None:
-            fallback = get_fallback_questions(
-                request.resume_text,
-                num_questions=request.num_questions
-            )
+            fallback = get_fallback_questions(request.resume_text, num_questions=request.num_questions)
             return {"questions": fallback}
 
-        # Gemini decides role internally from resume/JD
+        # Build experience context for the prompt
+        exp_context = _build_experience_context(request.experience_level, request.experience_years)
+
         questions = question_generator.generate_questions(
             resume_text=request.resume_text,
             num_questions=request.num_questions,
             difficulty=request.difficulty,
             job_description=request.job_description,
-            auto_select_count=request.auto_select_count
+            auto_select_count=request.auto_select_count,
+            experience_context=exp_context
         )
 
-        if not questions or len(questions) == 0:
-            fallback = get_fallback_questions(
-                request.resume_text,
-                num_questions=request.num_questions
-            )
+        if not questions:
+            fallback = get_fallback_questions(request.resume_text, num_questions=request.num_questions)
             return {"questions": fallback}
 
-        # Cache successful result
         cache = read_cache()
         cache[cache_key] = questions
         write_cache(cache)
@@ -439,26 +485,44 @@ def generate_questions(request: QuestionRequest):
         raise
     except Exception as e:
         print(f"Question generation error: {e}")
-
-        # Safe generic fallback (no role)
-        fallback = get_fallback_questions(
-            request.resume_text,
-            num_questions=request.num_questions
-        )
+        fallback = get_fallback_questions(request.resume_text, num_questions=request.num_questions)
         return {"questions": fallback}
 
-# ── LEGACY SINGLE EVALUATE (kept for backward compat) ────────────────────────
+
+def _build_experience_context(experience_level: str, experience_years: str) -> str:
+    """Build experience context string to inject into the question generation prompt."""
+    if experience_level == "fresher":
+        return (
+            "CANDIDATE EXPERIENCE LEVEL: FRESHER (0-1 years or student/recent graduate).\n"
+            "IMPORTANT: Generate questions appropriate for a fresher. Focus on:\n"
+            "- Academic projects and personal/hobby projects\n"
+            "- Conceptual understanding and fundamentals\n"
+            "- Learning agility and theoretical knowledge\n"
+            "- DO NOT ask about 'years of experience', 'production systems', or senior-level scenarios.\n"
+            "- Frame behavioral questions around college/academic experiences.\n"
+        )
+    elif experience_level == "experienced":
+        years_str = f"{experience_years} years" if experience_years else "multiple years"
+        return (
+            f"CANDIDATE EXPERIENCE LEVEL: EXPERIENCED ({years_str} of professional experience).\n"
+            "IMPORTANT: Generate questions appropriate for an experienced professional. Focus on:\n"
+            "- Real-world project experience and production systems\n"
+            "- Technical depth, architecture decisions, and trade-offs\n"
+            "- Leadership, mentoring, and cross-team collaboration\n"
+            "- Performance, scalability, and engineering best practices.\n"
+        )
+    return ""
+
+
+# ── LEGACY SINGLE EVALUATE ────────────────────────────────────────────────────
 @app.post("/evaluate_answer")
 def evaluate_answer(data: dict):
     question = (data.get("question") or "").strip()
     answer = data.get("answer", "")
-
     if not question:
         raise HTTPException(status_code=400, detail="Missing question")
-
     if answer is None:
         answer = ""
-
     try:
         if not answer_evaluator:
             raise Exception("AnswerEvaluator not initialized")
@@ -477,7 +541,7 @@ def evaluate_answer(data: dict):
         print(f"Evaluation Error: {e}")
         return {
             "score": 0,
-            "feedback": f"Evaluation service unavailable. Error: {str(e)[:120]}...",
+            "feedback": f"Evaluation service unavailable: {str(e)[:120]}",
             "missing_keywords": [],
             "improvements": "Check API connection or add GEMINI_API_KEY in .env",
             "ideal_answer": "AI evaluation fallback triggered.",
@@ -485,6 +549,7 @@ def evaluate_answer(data: dict):
             "ml_relevance_grade": None,
             "hybrid_score": 0
         }
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

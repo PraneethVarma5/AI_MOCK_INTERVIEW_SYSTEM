@@ -1,3 +1,4 @@
+// main.js
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const API_BASE =
     window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost'
@@ -5,27 +6,27 @@ const API_BASE =
         : 'https://ai-mock-interview-api-9sj4.onrender.com';
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let uploadInProgress = false;
-let setupStepInitialized = false;
-let uploadInitialized = false;
-let startButtonInitialized = false;
+let uploadInProgress          = false;
+let setupStepInitialized      = false;
+let uploadInitialized         = false;
+let startButtonInitialized    = false;
 let setupDifficultyInitialized = false;
-let setupCountSyncInitialized = false;
+let setupCountSyncInitialized  = false;
+
 let state = {
     step: 'mode',
-    mode: null,           // 'hr' | 'resume' | 'role'
+    mode: null,
     resumeText: '',
     questions: [],
     currentIndex: 0,
-    answers: {},          // { [index]: string }
+    answers: {},
     results: [],
     autoSelectCount: false,
     voiceMode: false,
     timerMode: false,
     timePerQuestion: 120,
     selectedRole: null,
-    lockedQuestions: new Set() // only matters when timer mode is ON
-
+    lockedQuestions: new Set(),
 };
 
 // ── DOM HELPERS ───────────────────────────────────────────────────────────────
@@ -72,7 +73,6 @@ function closeModal(id) {
     if (el) el.classList.remove('active');
 }
 
-// Close modal on overlay click
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('modal-overlay')) {
         e.target.classList.remove('active');
@@ -82,12 +82,24 @@ document.addEventListener('click', (e) => {
 // ── STEP NAVIGATION ───────────────────────────────────────────────────────────
 function showModeStep() {
     clearInterval(timerInterval);
-
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-    }
-
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     showStep('mode');
+}
+
+// Resume mode — BLOCKED for guests
+function openResumeMode() {
+    if (!Auth.isLoggedIn()) {
+        openModal('modal-auth');
+        switchAuthTab('login');
+        return;
+    }
+    if (Auth.isGuest) {
+        showError('Resume + JD mode requires a free account. Please sign in or register.');
+        openModal('modal-auth');
+        switchAuthTab('register');
+        return;
+    }
+    showSetupStep();
 }
 
 function showSetupStep() {
@@ -95,7 +107,6 @@ function showSetupStep() {
     showStep('setup');
     restoreSetupState();
 
-    // Initialize only once to avoid duplicate event listeners
     if (!setupStepInitialized) {
         initDifficultyPills();
         initQuestionCountSync();
@@ -124,7 +135,6 @@ function getSelectedDifficultyFrom(containerId) {
 
 function initDifficultyPills() {
     if (setupDifficultyInitialized) return;
-
     const pills = document.querySelectorAll('#step-setup .difficulty-pill');
     pills.forEach(pill => {
         pill.addEventListener('click', () => {
@@ -132,7 +142,6 @@ function initDifficultyPills() {
             pill.classList.add('active');
         });
     });
-
     setupDifficultyInitialized = true;
 }
 
@@ -145,61 +154,53 @@ function getSelectedDifficulty() {
 function syncCount(numId, rangeId) {
     const num = $(numId), range = $(rangeId);
     if (!num || !range) return;
-    num.addEventListener('input', () => { range.value = num.value; });
+    num.addEventListener('input',   () => { range.value = num.value; });
     range.addEventListener('input', () => { num.value = range.value; });
 }
 
 function initQuestionCountSync() {
     if (setupCountSyncInitialized) return;
-
     syncCount('count-input', 'count-range');
 
     const toggle = $('ai-optimized-toggle');
     const manual = $('manual-count-controls');
-
     if (toggle && manual) {
         toggle.addEventListener('change', () => {
             manual.style.display = toggle.checked ? 'none' : 'block';
             state.autoSelectCount = toggle.checked;
         });
     }
-
     setupCountSyncInitialized = true;
 }
+
+// ── NORMALIZE RESULTS ─────────────────────────────────────────────────────────
 function normalizeResults(results) {
     return (results || []).map((r, index) => ({
-        question: r.question || r.question_text || r.text || state.questions?.[index]?.text || `Question ${index + 1}`,
-        answer: r.answer || r.user_answer || state.answers?.[index] || "No answer provided.",
-        score: typeof r.score === 'number'
-            ? r.score
-            : (typeof r.hybrid_score === 'number' ? r.hybrid_score : 0),
-        feedback: r.feedback || "No feedback available.",
-        improvements: r.improvements || r.key_improvements || "Improve structure and relevance.",
-        ideal_answer: r.ideal_answer || r.sample_answer || "No ideal answer available.",
-        missing_keywords: Array.isArray(r.missing_keywords) ? r.missing_keywords : [],
-        ml_relevance_score: typeof r.ml_relevance_score === 'number'
-            ? r.ml_relevance_score
-            : (typeof r.relevance_score === 'number' ? r.relevance_score : 0),
-        type: r.type || state.questions?.[index]?.type || "technical",
-        difficulty: r.difficulty || state.questions?.[index]?.difficulty || "medium"
+        question:           r.question || r.question_text || r.text || state.questions?.[index]?.text || `Question ${index + 1}`,
+        answer:             r.answer   || r.user_answer   || state.answers?.[index] || '',
+        score:              typeof r.score        === 'number' ? r.score        : 0,
+        hybrid_score:       typeof r.hybrid_score === 'number' ? r.hybrid_score : (typeof r.score === 'number' ? r.score : 0),
+        feedback:           r.feedback     || 'No feedback available.',
+        improvements:       r.improvements || r.key_improvements || '',
+        ideal_answer:       r.ideal_answer || r.sample_answer   || 'N/A',
+        missing_keywords:   Array.isArray(r.missing_keywords) ? r.missing_keywords : [],
+        ml_relevance_score: typeof r.ml_relevance_score === 'number' ? r.ml_relevance_score : null,
+        type:               r.type       || state.questions?.[index]?.type       || 'technical',
+        difficulty:         r.difficulty || state.questions?.[index]?.difficulty || 'medium',
     }));
 }
 
 // ── SETUP STATE PERSISTENCE ───────────────────────────────────────────────────
 function saveSetupState() {
     const payload = {
-        jd: $('jd-input')?.value || '',
-        count: $('count-input')?.value || '5',
-        difficulty: getSelectedDifficulty(),
+        jd:          $('jd-input')?.value          || '',
+        count:       $('count-input')?.value        || '5',
+        difficulty:  getSelectedDifficulty(),
         aiOptimized: $('ai-optimized-toggle')?.checked || false,
-        voiceMode: $('voice-toggle')?.checked || false,
-        timerMode: $('timer-toggle')?.checked || false
+        voiceMode:   $('voice-toggle')?.checked     || false,
+        timerMode:   $('timer-toggle')?.checked     || false,
     };
-
     sessionStorage.setItem('interviewSetupState', JSON.stringify(payload));
-    sessionStorage.setItem('jobDescription', payload.jd);
-    sessionStorage.setItem('questionCount', payload.count);
-    sessionStorage.setItem('difficulty', payload.difficulty);
 }
 
 function restoreSetupState() {
@@ -207,16 +208,18 @@ function restoreSetupState() {
     if (!raw) return;
     try {
         const data = JSON.parse(raw);
-        if ($('jd-input')) $('jd-input').value = data.jd || '';
-        if ($('count-input')) $('count-input').value = data.count || '5';
-        if ($('count-range')) $('count-range').value = data.count || '5';
+        if ($('jd-input'))           $('jd-input').value             = data.jd    || '';
+        if ($('count-input'))        $('count-input').value           = data.count || '5';
+        if ($('count-range'))        $('count-range').value           = data.count || '5';
         if ($('ai-optimized-toggle')) $('ai-optimized-toggle').checked = !!data.aiOptimized;
-        if ($('voice-toggle')) $('voice-toggle').checked = !!data.voiceMode;
-        if ($('timer-toggle')) $('timer-toggle').checked = !!data.timerMode;
+        if ($('voice-toggle'))        $('voice-toggle').checked        = !!data.voiceMode;
+        if ($('timer-toggle'))        $('timer-toggle').checked        = !!data.timerMode;
+
         const pills = document.querySelectorAll('#step-setup .difficulty-pill');
         pills.forEach(p => p.classList.remove('active'));
         const target = document.querySelector(`#step-setup .difficulty-pill[data-value="${data.difficulty || 'mixed'}"]`);
         if (target) target.classList.add('active');
+
         const manualControls = $('manual-count-controls');
         if (manualControls) manualControls.style.display = data.aiOptimized ? 'none' : 'block';
         state.autoSelectCount = !!data.aiOptimized;
@@ -226,9 +229,10 @@ function restoreSetupState() {
 }
 
 function bindSetupPersistence() {
-    ['jd-input', 'count-input', 'count-range', 'ai-optimized-toggle', 'voice-toggle', 'timer-toggle'].forEach(id => {        const el = $(id);
+    ['jd-input', 'count-input', 'count-range', 'ai-optimized-toggle', 'voice-toggle', 'timer-toggle'].forEach(id => {
+        const el = $(id);
         if (!el || el.dataset.persistBound === 'true') return;
-        const eventType = el.type === 'checkbox' || el.type === 'range' ? 'change' : 'input';
+        const eventType = (el.type === 'checkbox' || el.type === 'range') ? 'change' : 'input';
         el.addEventListener(eventType, saveSetupState);
         el.dataset.persistBound = 'true';
     });
@@ -241,22 +245,22 @@ function bindSetupPersistence() {
 
 // ── HR INTERVIEW ──────────────────────────────────────────────────────────────
 async function startHRInterview() {
-    const numQ = parseInt($('hr-count')?.value || '5');
+    const numQ       = parseInt($('hr-count')?.value || '5');
     const difficulty = getSelectedDifficultyFrom('hr-difficulty-pills');
-    state.mode = 'hr';
+    state.mode      = 'hr';
     state.voiceMode = $('hr-voice')?.checked || false;
     state.timerMode = $('hr-timer')?.checked || false;
 
     closeModal('modal-hr');
     showStep('loading');
-    $('loading-text').textContent = 'Loading HR questions from database…';
+    $('loading-text').textContent = 'Loading HR questions please wait…';
 
     try {
         const res = await fetch(`${API_BASE}/db/hr_questions?num_questions=${numQ}&difficulty=${difficulty}`);
         if (!res.ok) throw new Error(`Server error ${res.status}`);
         const data = await res.json();
-        state.questions = data.questions;
-        state.answers = {};
+        state.questions    = data.questions;
+        state.answers      = {};
         state.currentIndex = 0;
         startInterview();
     } catch (e) {
@@ -269,51 +273,45 @@ async function startHRInterview() {
 async function loadRoles() {
     const sel = $('role-select');
     if (!sel) return;
-
     try {
-        const res = await fetch(`${API_BASE}/db/roles`);
+        const res  = await fetch(`${API_BASE}/db/roles`);
         if (!res.ok) throw new Error(`Server error ${res.status}`);
-
         const data = await res.json();
-
         if (!data.roles || data.roles.length === 0) {
             sel.innerHTML = `<option value="">No roles found</option>`;
-            sel.disabled = true;
-            showError('No role questions found in database. Run db_init.py first.');
+            sel.disabled  = true;
             return;
         }
-
         sel.innerHTML = `<option value="">Select a role</option>` +
             data.roles.map(r => `<option value="${r}">${r}</option>`).join('');
         sel.disabled = false;
-
     } catch (e) {
         console.warn('Could not load roles:', e);
         sel.innerHTML = `<option value="">Failed to load roles</option>`;
-        sel.disabled = true;
-        showError('Could not load roles. Make sure backend is running and database is initialized.');
+        sel.disabled  = true;
     }
 }
+
 async function startRoleInterview() {
     const role = $('role-select')?.value;
     if (!role) { showError('Please select a role.'); return; }
-    const numQ = parseInt($('role-count')?.value || '5');
+    const numQ       = parseInt($('role-count')?.value || '5');
     const difficulty = getSelectedDifficultyFrom('role-difficulty-pills');
-    state.mode = 'role';
+    state.mode         = 'role';
     state.selectedRole = role;
-    state.voiceMode = $('role-voice')?.checked || false;
-    state.timerMode = $('role-timer')?.checked || false;
+    state.voiceMode    = $('role-voice')?.checked || false;
+    state.timerMode    = $('role-timer')?.checked || false;
 
     closeModal('modal-role');
     showStep('loading');
-    $('loading-text').textContent = `Loading ${role} questions from database…`;
+    $('loading-text').textContent = `Loading ${role} questions please wait…`;
 
     try {
         const res = await fetch(`${API_BASE}/db/role_questions?role=${encodeURIComponent(role)}&num_questions=${numQ}&difficulty=${difficulty}`);
         if (!res.ok) throw new Error(`Server error ${res.status}`);
         const data = await res.json();
-        state.questions = data.questions;
-        state.answers = {};
+        state.questions    = data.questions;
+        state.answers      = {};
         state.currentIndex = 0;
         startInterview();
     } catch (e) {
@@ -323,41 +321,28 @@ async function startRoleInterview() {
 }
 
 // ── FILE UPLOAD ───────────────────────────────────────────────────────────────
-function initUpload() {
+async function initUpload() {
     if (uploadInitialized) return;
 
-    const dropZone = $('drop-zone');
-    const fileInput = $('resume-upload');
-    const startBtn = $('start-btn');
+    const fileUploadZone = $('file-upload');
+    const fileInput      = $('resume-file');
+    const startBtn       = $('start-btn');
 
-    if (!dropZone || !fileInput) return;
+    if (!fileUploadZone || !fileInput) return;
 
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, preventDefaults, false);
+    fileUploadZone.addEventListener('click', (e) => {
+        if (e.target !== fileInput) fileInput.click();
     });
 
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
-    });
+    // Drag-and-drop
+    const prevent = (e) => { e.preventDefault(); e.stopPropagation(); };
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => fileUploadZone.addEventListener(ev, prevent));
+    ['dragenter', 'dragover'].forEach(ev => fileUploadZone.addEventListener(ev, () => fileUploadZone.style.borderColor = 'var(--accent-color)'));
+    ['dragleave', 'drop'].forEach(ev => fileUploadZone.addEventListener(ev, () => fileUploadZone.style.borderColor = ''));
 
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
-    });
-
-    dropZone.addEventListener('click', () => {
-        fileInput.click();
-    });
-
-    dropZone.addEventListener('drop', (e) => {
+    fileUploadZone.addEventListener('drop', (e) => {
         const files = e.dataTransfer.files;
-        if (files && files.length > 0) {
-            handleResumeFile(files[0]);
-        }
+        if (files && files.length > 0) handleResumeFile(files[0]);
     });
 
     fileInput.addEventListener('change', (e) => {
@@ -367,134 +352,95 @@ function initUpload() {
 
     async function handleResumeFile(file) {
         if (uploadInProgress) return;
-
         uploadInProgress = true;
         if (startBtn) startBtn.disabled = true;
 
-        try {
-            // Stay on setup page during upload
-            showStep('setup');
-            updateFileInfo(file.name, false);
+        // Show loader
+        const uploadLoader  = $('upload-loader');
+        const uploadContent = $('upload-content');
+        if (uploadLoader)  uploadLoader.classList.remove('hidden');
+        if (uploadContent) uploadContent.classList.add('hidden');
 
+        try {
             const formData = new FormData();
             formData.append('file', file);
 
             const res = await fetch(`${API_BASE}/upload_resume`, {
-                method: 'POST',
-                body: formData
+                method:  'POST',
+                headers: { ...Auth.getAuthHeaders() },
+                body:    formData,
             });
 
             if (!res.ok) {
                 let errText = `Upload failed (${res.status})`;
-                try {
-                    const errData = await res.json();
-                    errText = errData.detail || errText;
-                } catch (_) {}
+                try { const d = await res.json(); errText = d.detail || errText; } catch (_) {}
                 throw new Error(errText);
             }
 
-            const data = await res.json();
-const extractedText = (data.resume_text || data.extracted_text || '').trim();
+            const data          = await res.json();
+            const extractedText = (data.resume_text || data.extracted_text || '').trim();
+            if (!extractedText) throw new Error('Resume text extraction returned empty content.');
 
-if (!extractedText) {
-    throw new Error('Resume text extraction returned empty content.');
-}
+            state.resumeText = extractedText;
+            sessionStorage.setItem('resumeText',          extractedText);
+            sessionStorage.setItem('uploadedResumeName',  file.name);
 
-state.resumeText = extractedText;
-sessionStorage.setItem('resumeText', extractedText);
-sessionStorage.setItem('uploadedResumeName', file.name);
-
-            updateFileInfo(file.name, true);
+            showUploadSuccess(file.name);
             if (startBtn) startBtn.disabled = false;
-            showSuccess('Resume uploaded successfully.');
-
-            // Stay on setup screen. DO NOT auto-navigate.
-            showStep('setup');
+            showSuccess('Resume uploaded successfully!');
 
         } catch (err) {
             console.error('Resume upload failed:', err);
             state.resumeText = '';
             sessionStorage.removeItem('resumeText');
             sessionStorage.removeItem('uploadedResumeName');
-
-            updateFileInfo('', false);
+            showUploadError(err.message);
             if (startBtn) startBtn.disabled = true;
-
-            // Keep user on setup instead of bouncing to landing page
-            showStep('setup');
             showError('Resume upload failed: ' + err.message);
         } finally {
+            const uploadLoader  = $('upload-loader');
+            const uploadContent = $('upload-content');
+            if (uploadLoader)  uploadLoader.classList.add('hidden');
+            if (uploadContent) uploadContent.classList.remove('hidden');
             uploadInProgress = false;
-            fileInput.value = '';
+            fileInput.value  = '';
         }
     }
 
-    // Restore previously uploaded resume from session
+    // Restore previously uploaded resume
     const savedFileName = sessionStorage.getItem('uploadedResumeName');
-    const savedText = sessionStorage.getItem('resumeText');
-
+    const savedText     = sessionStorage.getItem('resumeText');
     if (savedFileName && savedText) {
         state.resumeText = savedText;
-        updateFileInfo(savedFileName, true);
+        showUploadSuccess(savedFileName, true);
         if (startBtn) startBtn.disabled = false;
     }
 
     uploadInitialized = true;
 }
 
-function updateFileInfo(filename, restored = false) {
-    const fileInfo = $('file-info');
-    if (fileInfo) {
-        fileInfo.innerHTML = `
-            <div style="color:var(--success);font-weight:600;">✓ ${filename}</div>
-            <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">${restored ? 'Previously uploaded — Ready!' : 'Resume uploaded successfully!'}</div>
-        `;
+function showUploadSuccess(filename, restored = false) {
+    const fileNameEl = $('file-name');
+    if (fileNameEl) {
+        fileNameEl.innerHTML = `
+            <div style="color:var(--success);font-weight:600;margin-top:8px;">✓ ${filename}</div>
+            <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">
+                ${restored ? 'Previously uploaded — Ready!' : 'Resume parsed successfully!'}
+            </div>`;
+    }
+    const uploadContent = $('upload-content');
+    if (uploadContent) {
+        const icon = uploadContent.querySelector('div');
+        if (icon) icon.textContent = '✅';
     }
 }
 
-// async function handleFile(file) {
-//     const MAX_SIZE = 10 * 1024 * 1024;
-//     const allowed = ['.pdf', '.docx', '.txt'];
-//     const ext = '.' + file.name.split('.').pop().toLowerCase();
-//     if (!allowed.includes(ext)) { showError('Unsupported file type. Please use PDF, DOCX, or TXT.'); return; }
-//     if (file.size > MAX_SIZE) { showError('File too large. Max size is 10 MB.'); return; }
-//     if (uploadInProgress) return;
-//     uploadInProgress = true;
-
-//     const fileInfo = $('file-info');
-//     const startBtn = $('start-btn');
-
-//     if (fileInfo) {
-//         fileInfo.innerHTML = `<span class="loader" style="width:28px;height:28px;"></span><p style="margin-top:12px;">Parsing resume…</p>`;
-//     }
-//     if (startBtn) startBtn.disabled = true;
-
-//     try {
-//         const formData = new FormData();
-//         formData.append('file', file);
-
-//         const res = await fetch(`${API_BASE}/upload_resume`, { method: 'POST', body: formData });
-//         if (!res.ok) {
-//             const err = await res.json().catch(() => ({}));
-//             throw new Error(err.detail || `Upload failed (${res.status})`);
-//         }
-//         const data = await res.json();
-//         state.resumeText = data.extracted_text || '';
-//         sessionStorage.setItem('resumeText', state.resumeText);
-//         sessionStorage.setItem('uploadedResumeName', file.name);
-//         if (data.skill_match) sessionStorage.setItem('skillMatch', JSON.stringify(data.skill_match));
-//         updateFileInfo(file.name);
-//         if (startBtn) startBtn.disabled = false;
-//         showSuccess('Resume parsed successfully!');
-//     } catch (e) {
-//         if (fileInfo) {
-//             fileInfo.innerHTML = `<p style="color:var(--error);">⚠️ ${e.message}</p>`;
-//         }
-//         showError(e.message);
-//     } finally {
-//         uploadInProgress = false;
-//     }
-// }
+function showUploadError(msg) {
+    const fileNameEl = $('file-name');
+    if (fileNameEl) {
+        fileNameEl.innerHTML = `<div style="color:var(--error);font-weight:600;margin-top:8px;">⚠️ ${msg}</div>`;
+    }
+}
 
 // ── START BUTTON (Resume mode) ────────────────────────────────────────────────
 function initStartButton() {
@@ -508,33 +454,38 @@ function initStartButton() {
 
         saveSetupState();
 
-        const numQ = state.autoSelectCount ? 8 : parseInt($('count-input')?.value || '5');
+        const numQ       = state.autoSelectCount ? 8 : parseInt($('count-input')?.value || '5');
         const difficulty = getSelectedDifficulty();
-        const jd = $('jd-input')?.value || '';
-        state.voiceMode = $('voice-toggle')?.checked || false;
-        state.timerMode = $('timer-toggle')?.checked || false;
-        state.mode = 'resume';
+        const jd         = $('jd-input')?.value || '';
+        state.voiceMode  = $('voice-toggle')?.checked  || false;
+        state.timerMode  = $('timer-toggle')?.checked  || false;
+        state.mode       = 'resume';
+
+        const experienceLevel = typeof _experienceLevel !== 'undefined' ? _experienceLevel : 'experienced';
+        const experienceYears = typeof _experienceYears !== 'undefined' ? _experienceYears : '2';
 
         showStep('loading');
-        $('loading-text').textContent = 'Generating your personalized questions…';
+        $('loading-text').textContent = 'Generating your personalised questions…';
 
         try {
             const res = await fetch(`${API_BASE}/generate_questions`, {
-                method: 'POST',
+                method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                resume_text: state.resumeText,
-                job_description: jd,
-                difficulty,
-                num_questions: numQ,
-                auto_select_count: state.autoSelectCount,
-                force_refresh: false
-            })
+                body:    JSON.stringify({
+                    resume_text:       state.resumeText,
+                    job_description:   jd,
+                    difficulty,
+                    num_questions:     numQ,
+                    auto_select_count: state.autoSelectCount,
+                    force_refresh:     false,
+                    experience_level:  experienceLevel,
+                    experience_years:  experienceYears,
+                }),
             });
             if (!res.ok) throw new Error(`Question generation failed (${res.status})`);
-            const data = await res.json();
-            state.questions = data.questions;
-            state.answers = {};
+            const data         = await res.json();
+            state.questions    = data.questions;
+            state.answers      = {};
             state.currentIndex = 0;
             startInterview();
         } catch (e) {
@@ -547,7 +498,7 @@ function initStartButton() {
 
 // ── INTERVIEW ENGINE ──────────────────────────────────────────────────────────
 let timerInterval = null;
-let timeLeft = 120;
+let timeLeft      = 120;
 
 function startInterview() {
     state.lockedQuestions = new Set();
@@ -557,42 +508,42 @@ function startInterview() {
 }
 
 function renderQuestion() {
-    const q = state.questions[state.currentIndex];
+    const q     = state.questions[state.currentIndex];
     if (!q) return;
     const total = state.questions.length;
-    const idx = state.currentIndex;
+    const idx   = state.currentIndex;
 
-    $('q-counter').textContent = `Question ${idx + 1} of ${total}`;
+    $('q-counter').textContent     = `Question ${idx + 1} of ${total}`;
     $('progress-fill').style.width = `${((idx + 1) / total) * 100}%`;
 
     const qTag = $('q-tag');
     const type = (q.type || 'technical').toLowerCase();
     qTag.textContent = type.charAt(0).toUpperCase() + type.slice(1);
-    qTag.className = `question-tag tag-${type}`;
+    qTag.className   = `question-tag tag-${type}`;
 
     const diffBadge = $('q-diff-badge');
-    const diff = (q.difficulty || 'medium').toLowerCase();
+    const diff      = (q.difficulty || 'medium').toLowerCase();
     diffBadge.textContent = diff.charAt(0).toUpperCase() + diff.slice(1);
-    diffBadge.className = `diff-badge diff-${diff}`;
+    diffBadge.className   = `diff-badge diff-${diff}`;
 
     $('current-question').textContent = q.text;
-    $('answer-input').value = state.answers[idx] || '';
-    $('char-count').textContent = `${($('answer-input').value || '').length} characters`;
+    $('answer-input').value           = state.answers[idx] || '';
+    $('char-count').textContent       = `${($('answer-input').value || '').length} characters`;
 
     const prevBtn = $('prev-btn');
     const nextBtn = $('submit-answer-btn');
-    if (prevBtn) prevBtn.disabled = idx === 0;
+    if (prevBtn) prevBtn.disabled    = idx === 0;
     if (nextBtn) nextBtn.textContent = idx === total - 1 ? 'Finish Interview ✓' : 'Next Question →';
 
-    const timerDisplay = $('timer-display');
-if (state.timerMode) {
-    startTimer();
-} else {
-    clearInterval(timerInterval);
-    if (timerDisplay) timerDisplay.style.display = 'none';
-}
+    if (state.timerMode) {
+        startTimer();
+    } else {
+        clearInterval(timerInterval);
+        const td = $('timer-display');
+        if (td) td.style.display = 'none';
+    }
 
-if (state.voiceMode) readQuestion(q.text);
+    if (state.voiceMode) readQuestion(q.text);
 }
 
 function startTimer() {
@@ -605,10 +556,10 @@ function startTimer() {
         timeLeft--;
         updateTimerDisplay();
         if (timeLeft <= 0) {
-    clearInterval(timerInterval);
-    showError("Time's up! Moving to next question.");
-    advanceQuestion();
-}
+            clearInterval(timerInterval);
+            showError("Time's up! Moving to next question.");
+            advanceQuestion();
+        }
     }, 1000);
 }
 
@@ -622,15 +573,9 @@ function updateTimerDisplay() {
 }
 
 function advanceQuestion() {
-    const answerInput = document.getElementById('answer-input');
-    if (answerInput) {
-        state.answers[state.currentIndex] = answerInput.value || '';
-    }
-
-    // If timer mode is ON, lock the current question once user leaves it
-    if (state.timerMode) {
-        state.lockedQuestions.add(state.currentIndex);
-    }
+    const answerInput = $('answer-input');
+    if (answerInput) state.answers[state.currentIndex] = answerInput.value || '';
+    if (state.timerMode) state.lockedQuestions.add(state.currentIndex);
 
     if (state.currentIndex < state.questions.length - 1) {
         state.currentIndex++;
@@ -639,33 +584,27 @@ function advanceQuestion() {
         finishInterview();
     }
 }
+
 function goToPreviousQuestion() {
     if (state.currentIndex <= 0) return;
-
     const targetIndex = state.currentIndex - 1;
-
-    // Timer mode ON => block locked previous questions
     if (state.timerMode && state.lockedQuestions.has(targetIndex)) {
-        showError("Can't go to previous question because time is done or you already submitted the answer.");
+        showError("Can't go back — time ran out on that question.");
         return;
     }
-
-    // Save current answer before moving
-    const answerInput = document.getElementById('answer-input');
-    if (answerInput) {
-        state.answers[state.currentIndex] = answerInput.value || '';
-    }
-
+    const answerInput = $('answer-input');
+    if (answerInput) state.answers[state.currentIndex] = answerInput.value || '';
     state.currentIndex = targetIndex;
     renderQuestion();
 }
+
 function initVoiceControls() {
     const controls = $('voice-controls');
     if (!controls) return;
 
     if (state.voiceMode) {
         controls.style.display = 'flex';
-        const readBtn = $('read-question-btn');
+        const readBtn   = $('read-question-btn');
         const recordBtn = $('record-answer-btn');
 
         if (readBtn) {
@@ -682,22 +621,21 @@ function initVoiceControls() {
             recordBtn.onclick = () => {
                 if (recognition) { recognition.stop(); recognition = null; recordBtn.textContent = '🎤 Start Recording'; return; }
                 recognition = new SR();
-                recognition.lang = 'en-US';
-                recognition.interimResults = false;
-                recordBtn.textContent = '🔴 Recording…';
-
+                recognition.lang            = 'en-US';
+                recognition.interimResults  = false;
+                recordBtn.textContent       = '🔴 Recording…';
                 recognition.onresult = (e) => {
                     const transcript = e.results[0][0].transcript;
                     const input = $('answer-input');
                     input.value += (input.value ? ' ' : '') + transcript;
                     $('char-count').textContent = `${input.value.length} characters`;
                 };
-                recognition.onend = () => { recordBtn.textContent = '🎤 Start Recording'; recognition = null; };
+                recognition.onend   = () => { recordBtn.textContent = '🎤 Start Recording'; recognition = null; };
                 recognition.onerror = () => { recordBtn.textContent = '🎤 Start Recording'; recognition = null; showError('Speech recognition error.'); };
                 recognition.start();
             };
         } else if (recordBtn) {
-            recordBtn.disabled = true;
+            recordBtn.disabled    = true;
             recordBtn.textContent = '🎤 Not supported';
         }
     } else {
@@ -709,8 +647,8 @@ function readQuestion(text) {
     if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(text);
-        utter.lang = 'en-US';
-        utter.rate = 0.95;
+        utter.lang  = 'en-US';
+        utter.rate  = 0.95;
         window.speechSynthesis.speak(utter);
     }
 }
@@ -725,27 +663,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const prevBtn = $('prev-btn');
-if (prevBtn) {
-    prevBtn.addEventListener('click', goToPreviousQuestion);
-}
+    if (prevBtn) prevBtn.addEventListener('click', goToPreviousQuestion);
 
     const nextBtn = $('submit-answer-btn');
-    if (nextBtn) {
-        nextBtn.addEventListener('click', advanceQuestion);
-    }
+    if (nextBtn) nextBtn.addEventListener('click', advanceQuestion);
 
-    // Load roles for modal
     loadRoles();
-
-    // Sync count sliders in modals
-    syncCount('hr-count', 'hr-range');
+    syncCount('hr-count',   'hr-range');
     syncCount('role-count', 'role-range');
-
-    // Difficulty pills in modals
     initDifficultyPillsIn('hr-difficulty-pills');
     initDifficultyPillsIn('role-difficulty-pills');
-
-    // Show mode selection on load
     showStep('mode');
 });
 
@@ -756,22 +683,19 @@ async function finishInterview() {
     showStep('evaluating');
 
     const answersPayload = state.questions.map((q, i) => ({
-    question: q.text,
-    answer: state.answers[i] || '',
-    type: q.type || 'technical',
-    difficulty: q.difficulty || 'medium',
-    keywords: Array.isArray(q.keywords) ? q.keywords : null,
-    ideal_answer: q.ideal_answer || null
-}));
+        question:     q.text,
+        answer:       state.answers[i] || '',
+        type:         q.type         || 'technical',
+        difficulty:   q.difficulty   || 'medium',
+        keywords:     Array.isArray(q.keywords)  ? q.keywords    : null,
+        ideal_answer: q.ideal_answer || null,
+    }));
 
     try {
         const res = await fetch(`${API_BASE}/batch_evaluate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                answers: answersPayload,
-                mode: state.mode || 'resume'
-            })
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', ...Auth.getAuthHeaders() },
+            body:    JSON.stringify({ answers: answersPayload, mode: state.mode || 'resume' }),
         });
 
         if (!res.ok) {
@@ -779,57 +703,66 @@ async function finishInterview() {
             throw new Error(`Evaluation failed (${res.status}): ${errText}`);
         }
 
-        const data = await res.json();
-state.results = normalizeResults(data.results || []);
-
-// Safety fallback if backend returns malformed data
-if (!state.results.length) {
-    throw new Error('No evaluation results returned from backend');
-}
+        const data    = await res.json();
+        state.results = normalizeResults(data.results || []);
+        if (!state.results.length) throw new Error('No evaluation results returned');
 
     } catch (e) {
         console.error('Batch evaluation error:', e);
-
-        // Always preserve original question/answer metadata in fallback
         state.results = state.questions.map((q, i) => ({
-            question: q.text,
-            answer: state.answers[i] || '',
-            type: q.type || 'technical',
-            difficulty: q.difficulty || 'medium',
-            score: 0,
-            feedback: 'Evaluation service unavailable.',
-            missing_keywords: [],
-            improvements: 'Check your API configuration.',
-            ideal_answer: 'N/A',
+            question:          q.text,
+            answer:            state.answers[i] || '',
+            type:              q.type       || 'technical',
+            difficulty:        q.difficulty || 'medium',
+            score:             0,
+            hybrid_score:      0,
+            feedback:          'Evaluation service temporarily unavailable.',
+            missing_keywords:  [],
+            improvements:      'Please try again.',
+            ideal_answer:      'N/A',
             ml_relevance_score: null,
-            ml_relevance_grade: 'N/A',
-            hybrid_score: 0
         }));
     }
 
     renderResults();
     showStep('results');
+
+    if (typeof saveSessionToSupabase === 'function') {
+        const overallScore = state.results.length
+            ? parseFloat((state.results.reduce((s, r) => s + (r.hybrid_score ?? r.score ?? 0), 0) / state.results.length).toFixed(1))
+            : 0;
+
+        const sessionMeta = {
+            mode:             state.mode || 'resume',
+            role:             state.selectedRole || null,
+            difficulty:       getSelectedDifficulty ? getSelectedDifficulty() : 'mixed',
+            experience_level: typeof _experienceLevel !== 'undefined' ? _experienceLevel : 'experienced',
+            experience_years: typeof _experienceYears !== 'undefined' ? _experienceYears : '',
+            num_questions:    state.questions.length,
+        };
+        saveSessionToSupabase(sessionMeta, state.questions, state.results, overallScore);
+    }
 }
+
 // ── RESULTS RENDERER ──────────────────────────────────────────────────────────
 function renderResults() {
     const results = Array.isArray(state.results) ? state.results : [];
 
-    // Merge backend results with original question/answer metadata safely
     const mergedResults = results.map((res, idx) => {
         const originalQ = state.questions[idx] || {};
         return {
-            question: res.question ?? originalQ.text ?? 'Question unavailable',
-            answer: res.answer ?? state.answers[idx] ?? '',
-            type: res.type ?? originalQ.type ?? 'technical',
-            difficulty: res.difficulty ?? originalQ.difficulty ?? 'medium',
-            score: typeof res.score === 'number' ? res.score : 0,
-            hybrid_score: typeof res.hybrid_score === 'number' ? res.hybrid_score : (typeof res.score === 'number' ? res.score : 0),
-            feedback: res.feedback ?? 'No feedback.',
-            missing_keywords: Array.isArray(res.missing_keywords) ? res.missing_keywords : [],
-            improvements: res.improvements ?? '',
-            ideal_answer: res.ideal_answer ?? 'N/A',
+            question:           res.question           ?? originalQ.text       ?? `Question ${idx + 1}`,
+            answer:             res.answer             ?? state.answers[idx]   ?? '',
+            type:               res.type               ?? originalQ.type       ?? 'technical',
+            difficulty:         res.difficulty         ?? originalQ.difficulty ?? 'medium',
+            score:              typeof res.score        === 'number' ? res.score        : 0,
+            hybrid_score:       typeof res.hybrid_score === 'number' ? res.hybrid_score : (typeof res.score === 'number' ? res.score : 0),
+            feedback:           res.feedback           ?? 'No feedback.',
+            missing_keywords:   Array.isArray(res.missing_keywords) ? res.missing_keywords : [],
+            improvements:       res.improvements       ?? '',
+            ideal_answer:       res.ideal_answer       ?? 'N/A',
             ml_relevance_score: res.ml_relevance_score ?? null,
-            ml_relevance_grade: res.ml_relevance_grade ?? 'N/A'
+            ml_relevance_grade: res.ml_relevance_grade ?? 'N/A',
         };
     });
 
@@ -837,29 +770,26 @@ function renderResults() {
 
     const getDisplayScore = (r) => {
         if (typeof r.hybrid_score === 'number') return r.hybrid_score;
-        if (typeof r.score === 'number') return r.score;
+        if (typeof r.score        === 'number') return r.score;
         return 0;
     };
 
-    const totalScore = mergedResults.reduce((sum, r) => sum + getDisplayScore(r), 0);
-    const avg = mergedResults.length ? (totalScore / mergedResults.length).toFixed(1) : '0';
+    const totalScore  = mergedResults.reduce((sum, r) => sum + getDisplayScore(r), 0);
+    const avg         = mergedResults.length ? (totalScore / mergedResults.length).toFixed(1) : '0';
     const strongCount = mergedResults.filter(r => getDisplayScore(r) >= 7).length;
 
     const avgScoreEl = $('avg-score');
     if (avgScoreEl) {
         avgScoreEl.innerText = avg;
-        const avgNum = parseFloat(avg);
+        const avgNum     = parseFloat(avg);
         const scoreColor = avgNum >= 7 ? 'var(--success)' : (avgNum >= 5 ? '#ffc107' : 'var(--error)');
-        if (avgScoreEl.parentElement) {
-            avgScoreEl.parentElement.style.borderColor = scoreColor;
-        }
+        if (avgScoreEl.parentElement) avgScoreEl.parentElement.style.borderColor = scoreColor;
     }
 
-    // Mode label
     const modeLabels = {
-        hr: '🎯 HR Practice',
+        hr:     '🎯 HR Practice',
         resume: '📄 Resume + JD',
-        role: `💼 ${state.selectedRole || 'Role'} Practice`
+        role:   `💼 ${state.selectedRole || 'Role'} Practice`,
     };
     const modeLabel = $('results-mode-label');
     if (modeLabel) modeLabel.textContent = `Mode: ${modeLabels[state.mode] || 'Mock Interview'}`;
@@ -878,8 +808,7 @@ function renderResults() {
             <div class="stat-card">
                 <span class="stat-number">${mergedResults.length - strongCount}</span>
                 <span class="stat-label">Needs Work</span>
-            </div>
-        `;
+            </div>`;
     }
 
     const feedbackList = $('feedback-list');
@@ -888,9 +817,9 @@ function renderResults() {
 
     mergedResults.forEach((res, idx) => {
         const displayScore = getDisplayScore(res);
-        const scoreColor = displayScore >= 7 ? 'var(--success)' : (displayScore >= 5 ? '#ffc107' : 'var(--error)');
-        const typeClass = `tag-${(res.type || 'technical').toLowerCase()}`;
-        const diffClass = `diff-${(res.difficulty || 'medium').toLowerCase()}`;
+        const scoreColor   = displayScore >= 7 ? 'var(--success)' : (displayScore >= 5 ? '#ffc107' : 'var(--error)');
+        const typeClass    = `tag-${(res.type       || 'technical').toLowerCase()}`;
+        const diffClass    = `diff-${(res.difficulty || 'medium').toLowerCase()}`;
 
         let relevanceHtml = '';
         if (res.ml_relevance_grade && res.ml_relevance_grade !== 'N/A' && typeof res.ml_relevance_score === 'number') {

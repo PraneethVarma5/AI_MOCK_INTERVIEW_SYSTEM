@@ -1,3 +1,4 @@
+<!-- interview.html -->
 <!DOCTYPE html>
 <html lang="en">
 
@@ -9,154 +10,246 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* ── MODE SELECTION ── */
-        .mode-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 16px;
-            margin-top: 8px;
-        }
-        .mode-card {
-            background: var(--card-bg);
-            border: 1.5px solid var(--glass-border);
-            border-radius: 16px;
-            padding: 28px 20px;
-            cursor: pointer;
-            transition: border-color 0.25s, transform 0.2s, background 0.25s;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-        .mode-card:hover {
-            border-color: var(--accent-color);
-            transform: translateY(-3px);
-            background: rgba(124, 77, 255, 0.07);
-        }
-        .mode-icon {
-            font-size: 2.4rem;
-            display: block;
-            margin-bottom: 12px;
-        }
-        .mode-card h3 {
-            font-size: 1rem;
-            font-weight: 700;
-            margin-bottom: 6px;
-        }
-        .mode-card p {
-            font-size: 0.82rem;
-            color: var(--text-secondary);
-            line-height: 1.5;
-        }
-        .mode-badge {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(124, 77, 255, 0.2);
-            color: #9c6bff;
-            font-size: 0.65rem;
-            font-weight: 700;
-            padding: 3px 8px;
-            border-radius: 20px;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
+        .mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 8px; }
+        .mode-card { background: var(--card-bg); border: 1.5px solid var(--glass-border); border-radius: 16px; padding: 28px 20px; cursor: pointer; transition: border-color 0.25s, transform 0.2s, background 0.25s; text-align: center; position: relative; overflow: hidden; }
+        .mode-card:hover { border-color: var(--accent-color); transform: translateY(-3px); background: rgba(124, 77, 255, 0.07); }
+        .mode-card.locked { opacity: 0.5; cursor: not-allowed; }
+        .mode-card.locked:hover { transform: none; border-color: var(--glass-border); background: var(--card-bg); }
+        .mode-icon { font-size: 2.4rem; display: block; margin-bottom: 12px; }
+        .mode-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+        .mode-card p { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; }
+        .mode-badge { position: absolute; top: 10px; right: 10px; background: rgba(124, 77, 255, 0.2); color: #9c6bff; font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
+        .mode-badge-lock { position: absolute; top: 10px; left: 10px; background: rgba(255,82,82,0.2); color: #ff7979; font-size: 0.65rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; }
 
-        /* ── MODAL / DIALOG ── */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.72);
-            backdrop-filter: blur(6px);
-            z-index: 100;
-            display: flex;
+        /* ── AUTH GATE (z-index 200) ── */
+        #auth-gate {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(10px);
+            z-index: 200;
             align-items: center;
             justify-content: center;
             padding: 20px;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.25s;
         }
-        .modal-overlay.active {
-            opacity: 1;
-            pointer-events: all;
-        }
-        .modal-box {
+        #auth-gate.visible { display: flex; }
+        .auth-gate-box {
             background: #0f0f18;
             border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 36px;
-            max-width: 520px;
+            border-radius: 24px;
+            padding: 48px 40px;
+            max-width: 440px;
             width: 100%;
-            max-height: 90vh;
-            overflow-y: auto;
-            transform: translateY(20px);
-            transition: transform 0.25s;
+            text-align: center;
         }
-        .modal-overlay.active .modal-box {
-            transform: translateY(0);
-        }
-        .modal-title {
-            font-size: 1.4rem;
-            font-weight: 800;
-            margin-bottom: 6px;
-        }
-        .modal-subtitle {
-            color: var(--text-secondary);
-            font-size: 0.88rem;
-            margin-bottom: 28px;
-            line-height: 1.5;
-        }
-        .modal-close {
-            position: absolute;
-            top: 16px;
-            right: 20px;
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            font-size: 1.4rem;
-            cursor: pointer;
-            line-height: 1;
-            padding: 4px;
-        }
-        .modal-box { position: relative; }
+        .auth-gate-box h2 { font-size: 1.6rem; font-weight: 800; margin-bottom: 12px; }
+        .auth-gate-box p  { color: var(--text-secondary); margin-bottom: 32px; line-height: 1.6; }
+        .auth-gate-actions { display: flex; flex-direction: column; gap: 12px; }
 
-        /* ── ROLE DROPDOWN ── */
-        .role-select {
-            width: 100%;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid var(--glass-border);
-            border-radius: 10px;
-            color: white;
-            font-size: 0.95rem;
-            padding: 12px 14px;
-            margin-bottom: 20px;
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b0b0b0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 14px center;
-            cursor: pointer;
-            transition: border-color 0.2s;
+        /* ── MODAL (z-index 300 — ABOVE auth-gate)
+           ROOT FIX: modal was z-index 100, auth-gate was 200.
+           Modal was invisible under the gate. Now modal = 300. ── */
+        .modal-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.72);
+            backdrop-filter: blur(6px);
+            z-index: 300;                /* ← KEY FIX */
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.25s;
         }
-        .role-select:focus {
-            outline: none;
-            border-color: var(--accent-color);
-        }
-        .role-select option {
-            background: #151520;
-        }
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
+        .modal-box { background: #0f0f18; border: 1px solid var(--glass-border); border-radius: 20px; padding: 36px; max-width: 520px; width: 100%; max-height: 90vh; overflow-y: auto; transform: translateY(20px); transition: transform 0.25s; position: relative; }
+        .modal-overlay.active .modal-box { transform: translateY(0); }
+        .modal-title { font-size: 1.4rem; font-weight: 800; margin-bottom: 6px; }
+        .modal-subtitle { color: var(--text-secondary); font-size: 0.88rem; margin-bottom: 28px; line-height: 1.5; }
+        .modal-close { position: absolute; top: 16px; right: 20px; background: none; border: none; color: var(--text-secondary); font-size: 1.4rem; cursor: pointer; }
+        .modal-section-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); margin-bottom: 10px; display: block; }
+        .role-select { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 10px; color: white; font-size: 0.95rem; padding: 12px 14px; margin-bottom: 20px; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b0b0b0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; cursor: pointer; transition: border-color 0.2s; }
+        .role-select:focus { outline: none; border-color: var(--accent-color); }
+        .role-select option { background: #151520; }
 
-        /* ── SECTION HEADER IN MODAL ── */
-        .modal-section-label {
-            font-size: 0.7rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--text-secondary);
-            margin-bottom: 10px;
-            display: block;
+        /* ── EXPERIENCE TOGGLE ── */
+        .exp-toggle-row { display: flex; align-items: center; gap: 0; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 10px; padding: 4px; margin-bottom: 16px; }
+        .exp-toggle-btn { flex: 1; padding: 9px 14px; background: none; border: none; color: var(--text-secondary); font-size: 0.88rem; font-weight: 600; cursor: pointer; border-radius: 7px; transition: all 0.2s; }
+        .exp-toggle-btn.active { background: var(--accent-color); color: white; }
+        .exp-years-row { display: none; margin-bottom: 16px; }
+        .exp-years-row.visible { display: block; }
+        .exp-years-select { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 10px; color: white; font-size: 0.9rem; padding: 10px 14px; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b0b0b0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; cursor: pointer; }
+        .exp-years-select option { background: #151520; }
+
+        /* ── RESUME UPLOAD LOADER ── */
+        .upload-loader { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px 0; }
+        .upload-loader-spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1); border-bottom-color: var(--accent-color); border-radius: 50%; animation: rotation 0.9s linear infinite; }
+        .upload-loader-text { font-size: 0.9rem; color: var(--text-secondary); font-weight: 600; }
+        .upload-loader-dots::after { content: ''; animation: dots 1.4s steps(4, end) infinite; }
+        @keyframes dots { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} 100%{content:''} }
+
+        /* ── AUTH HEADER ── */
+        .interview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+        .auth-header-btn { background: rgba(124,77,255,0.15); border: 1px solid rgba(124,77,255,0.3); color: #9c6bff; padding: 8px 18px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s; text-decoration: none; }
+        .auth-header-btn:hover { background: rgba(124,77,255,0.3); color: white; }
+        .user-avatar { display: flex; align-items: center; gap: 8px; }
+        .user-avatar-circle { width: 32px; height: 32px; background: linear-gradient(135deg, #7c4dff, #00e5ff); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 800; color: white; }
+
+        /* ── AUTH MODAL styles ── */
+        .auth-tabs { display: flex; gap: 4px; background: rgba(255,255,255,0.04); border-radius: 10px; padding: 4px; margin-bottom: 28px; }
+        .auth-tab { flex: 1; padding: 9px; text-align: center; background: none; border: none; color: var(--text-secondary); font-size: 0.88rem; font-weight: 600; cursor: pointer; border-radius: 7px; transition: all 0.2s; }
+        .auth-tab.active { background: var(--accent-color); color: white; }
+        .auth-input-group { margin-bottom: 16px; }
+        .auth-input-group label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .auth-input-group input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 10px; color: white; font-size: 0.95rem; padding: 12px 14px; transition: border-color 0.2s; box-sizing: border-box; }
+        .auth-input-group input:focus { outline: none; border-color: var(--accent-color); }
+        .auth-form-section { display: none; }
+        .auth-form-section.active { display: block; }
+        .auth-error { color: #ff6b6b; font-size: 0.84rem; margin-top: -8px; margin-bottom: 12px; display: none; }
+        .auth-error.visible { display: block; }
+        .auth-success { color: #69f0ae; font-size: 0.84rem; margin-bottom: 12px; display: none; }
+        .auth-success.visible { display: block; }
+        .otp-inputs { display: flex; gap: 8px; justify-content: center; margin: 20px 0; }
+        .otp-digit { width: 48px; height: 56px; background: rgba(255,255,255,0.05); border: 1.5px solid var(--glass-border); border-radius: 10px; color: white; font-size: 1.5rem; font-weight: 800; text-align: center; transition: border-color 0.2s; }
+        .otp-digit:focus { outline: none; border-color: var(--accent-color); }
+        .guest-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
+        .guest-divider span { color: var(--text-secondary); font-size: 0.8rem; white-space: nowrap; }
+        .guest-divider::before, .guest-divider::after { content: ''; flex: 1; height: 1px; background: var(--glass-border); }
+
+        /* ── DEV MODE OTP hint ── */
+        .otp-dev-hint {
+            background: rgba(255,193,7,0.1);
+            border: 1px solid rgba(255,193,7,0.3);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 0.8rem;
+            color: #ffc107;
+            margin-bottom: 14px;
+            display: none;
+            line-height: 1.6;
         }
+        .otp-dev-hint.visible { display: block; }
+        .otp-dev-hint code { color: #ffd54f; font-family: monospace; font-size: 0.82rem; }
+
+        /* ── PERFORMANCE DASHBOARD ── */
+        .dashboard-modal .modal-box { max-width: 820px; }
+        .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+        @media (max-width: 600px) { .chart-grid { grid-template-columns: 1fr; } }
+        .chart-card { background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: 12px; padding: 20px; }
+        .chart-card h4 { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin-bottom: 16px; }
+        .mini-bar-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .mini-bar-label { font-size: 0.8rem; color: var(--text-secondary); min-width: 80px; }
+        .mini-bar-track { flex: 1; height: 8px; background: rgba(255,255,255,0.07); border-radius: 4px; overflow: hidden; }
+        .mini-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+        .mini-bar-val { font-size: 0.8rem; font-weight: 700; min-width: 32px; text-align: right; }
+        .stat-pill-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+        .stat-pill { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 10px; padding: 14px 18px; flex: 1; min-width: 110px; }
+        .stat-pill .val { font-size: 1.5rem; font-weight: 800; }
+        .stat-pill .lbl { font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px; }
+        .sparkline-dot { transition: r 0.2s; cursor: pointer; }
+
+        /* ── PASSWORD STRENGTH ── */
+        .pw-strength-bar { display: flex; gap: 4px; margin-top: 6px; margin-bottom: 4px; }
+        .pw-seg { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.1); transition: background 0.3s; }
+        .pw-seg.weak { background: #ff5252; }
+        .pw-seg.fair { background: #ffc107; }
+        .pw-seg.strong { background: #69f0ae; }
+        .pw-strength-label { font-size: 0.72rem; color: var(--text-secondary); min-height: 1em; }
+        .pw-show-toggle { position: relative; }
+        .pw-show-toggle input { padding-right: 48px !important; }
+        .pw-eye-btn { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1rem; padding: 4px; }
+
+        /* ── DASHBOARD: KPI GRID ── */
+        .db-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+        @media (max-width: 700px) { .db-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+        .db-kpi { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 16px; position: relative; overflow: hidden; transition: border-color 0.2s, transform 0.2s; cursor: default; }
+        .db-kpi:hover { border-color: rgba(124,77,255,0.4); transform: translateY(-2px); }
+        .db-kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--kpi-accent, linear-gradient(90deg, #7c4dff, #00e5ff)); }
+        .db-kpi-icon { font-size: 1.2rem; margin-bottom: 6px; }
+        .db-kpi-val { font-size: 1.8rem; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+        .db-kpi-lbl { font-size: 0.68rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        .db-kpi-delta { font-size: 0.68rem; margin-top: 3px; font-weight: 600; }
+        .db-kpi-delta.pos { color: #69f0ae; }
+        .db-kpi-delta.neg { color: #ff8a80; }
+
+        /* ── DASHBOARD: MODE FILTER BAR ── */
+        .db-mode-bar { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 18px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 5px; }
+        .db-mode-btn { flex: 1; min-width: 70px; padding: 8px 12px; background: none; border: none; color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; cursor: pointer; border-radius: 8px; transition: all 0.2s; white-space: nowrap; }
+        .db-mode-btn:hover { color: white; background: rgba(124,77,255,0.15); }
+        .db-mode-btn.active { background: var(--accent-color); color: white; }
+
+        /* ── DASHBOARD: CHART GRIDS ── */
+        .db-chart-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px; }
+        @media (max-width: 680px) { .db-chart-grid { grid-template-columns: 1fr; } }
+        .db-chart-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 14px; }
+        @media (max-width: 680px) { .db-chart-grid-3 { grid-template-columns: 1fr; } }
+
+        /* ── DASHBOARD: CARD ── */
+        .db-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 16px; position: relative; }
+        .db-card-title { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-secondary); margin-bottom: 12px; display: flex; align-items: center; gap: 7px; }
+        .db-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-color); flex-shrink: 0; }
+        .db-canvas-wrap { position: relative; height: 170px; }
+
+        /* ── DASHBOARD: WEAK AREAS ── */
+        .db-weak-item { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; padding: 9px 11px; background: rgba(255,82,82,0.05); border: 1px solid rgba(255,82,82,0.12); border-radius: 10px; }
+        .db-weak-label { font-size: 0.8rem; font-weight: 600; flex: 1; color: #ff8a80; }
+        .db-weak-track { flex: 2; height: 5px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; }
+        .db-weak-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #ff5252, #ff9800); transition: width 0.8s ease; }
+        .db-weak-score { font-size: 0.76rem; font-weight: 800; color: #ff8a80; min-width: 26px; text-align: right; }
+
+        /* ── DASHBOARD: TABLE ── */
+        .db-table-wrap { overflow-x: auto; }
+        .db-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        .db-table th { padding: 7px 10px; color: var(--text-secondary); font-size: 0.67rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.06); white-space: nowrap; }
+        .db-table td { padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+        .db-table tr:last-child td { border-bottom: none; }
+        .db-table tr:hover td { background: rgba(124,77,255,0.04); }
+        .db-score-badge { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; font-weight: 800; font-size: 0.82rem; }
+        .db-score-hi { background: rgba(105,240,174,0.15); color: #69f0ae; }
+        .db-score-mid { background: rgba(255,193,7,0.12); color: #ffc107; }
+        .db-score-lo { background: rgba(255,82,82,0.12); color: #ff8a80; }
+        .db-mode-chip { display: inline-block; padding: 3px 8px; border-radius: 20px; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+        .db-chip-resume { background: rgba(124,77,255,0.18); color: #9c6bff; }
+        .db-chip-hr { background: rgba(0,229,255,0.12); color: #00e5ff; }
+        .db-chip-role { background: rgba(105,240,174,0.12); color: #69f0ae; }
+        .db-view-btn { padding: 5px 12px; background: rgba(124,77,255,0.15); border: 1px solid rgba(124,77,255,0.3); border-radius: 8px; color: #9c6bff; font-size: 0.72rem; font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+        .db-view-btn:hover { background: rgba(124,77,255,0.3); color: white; }
+
+        /* ── DASHBOARD: EMPTY STATE ── */
+        .db-empty { text-align: center; padding: 32px 20px; color: var(--text-secondary); }
+        .db-empty-icon { font-size: 2.2rem; margin-bottom: 10px; }
+        .db-empty-msg { font-size: 0.88rem; font-weight: 600; margin-bottom: 5px; color: white; }
+        .db-empty-sub { font-size: 0.78rem; }
+
+        /* ── SESSION DETAIL ── */
+        .sd-header { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-bottom: 18px; }
+        .sd-kpi { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 11px; padding: 12px 14px; text-align: center; }
+        .sd-kpi-val { font-size: 1.4rem; font-weight: 800; }
+        .sd-kpi-lbl { font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+        .sd-qa-list { display: flex; flex-direction: column; gap: 10px; }
+        .sd-qa-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; overflow: hidden; }
+        .sd-qa-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 13px 15px; cursor: pointer; transition: background 0.2s; }
+        .sd-qa-header:hover { background: rgba(255,255,255,0.03); }
+        .sd-qa-q { font-weight: 600; font-size: 0.87rem; line-height: 1.45; flex: 1; }
+        .sd-qa-chevron { transition: transform 0.25s; color: var(--text-secondary); font-size: 0.7rem; flex-shrink: 0; margin-top: 2px; }
+        .sd-qa-chevron.open { transform: rotate(180deg); }
+        .sd-qa-body { padding: 0 15px 14px; display: none; border-top: 1px solid rgba(255,255,255,0.05); }
+        .sd-qa-body.open { display: block; }
+        .sd-section-lbl { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); margin-bottom: 5px; margin-top: 12px; }
+        .sd-section-lbl:first-child { margin-top: 12px; }
+        .sd-text-block { background: rgba(255,255,255,0.04); border-radius: 9px; padding: 10px 12px; font-size: 0.83rem; line-height: 1.6; color: rgba(255,255,255,0.85); }
+        .sd-ideal { border-left: 3px solid var(--accent-color); }
+        .sd-kw-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+        .sd-kw-tag { background: rgba(124,77,255,0.15); color: #9c6bff; padding: 2px 9px; border-radius: 20px; font-size: 0.68rem; font-weight: 600; }
+        .sd-back-btn { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; font-weight: 600; padding: 6px 14px; margin-bottom: 18px; transition: all 0.2s; }
+        .sd-back-btn:hover { color: white; background: rgba(124,77,255,0.15); border-color: rgba(124,77,255,0.3); }
+
+        /* Dashboard modal override */
+        .db-modal .modal-box { max-width: 920px; padding: 26px 28px 36px; }
     </style>
+
 </head>
 
 <body>
@@ -165,50 +258,253 @@
         <div class="blob blob-2"></div>
     </div>
 
-    <!-- Toast Notifications -->
-    <div id="error-toast" class="toast toast-error hidden"></div>
+    <div id="error-toast"   class="toast toast-error   hidden"></div>
     <div id="success-toast" class="toast toast-success hidden"></div>
 
+    <!-- ══════════════════════════════════════════════════════
+         AUTH GATE  (z-index: 200)
+    ══════════════════════════════════════════════════════ -->
+    <div id="auth-gate">
+        <div class="auth-gate-box">
+            <div style="font-size:3rem;margin-bottom:16px;">🔐</div>
+            <h2>Welcome to InterviewAI</h2>
+            <p>Sign in or create an account to start practising interviews.<br>
+               You can also continue as a guest for the HR &amp; Role modes.</p>
+            <div class="auth-gate-actions">
+                <!--
+                    FIX: Was calling openModal('modal-auth') which only added .active class.
+                    But the modal had z-index:100, auth-gate has z-index:200 → modal was hidden behind gate.
+                    Fix: openAuthModal() sets z-index:300 on modal before showing, ensuring it appears on top.
+                -->
+                <button class="btn" onclick="openAuthModal('login')">Sign In</button>
+                <button class="btn" style="background:rgba(124,77,255,0.2);border:1px solid rgba(124,77,255,0.4);"
+                        onclick="openAuthModal('register')">Create Account</button>
+                <button class="btn btn-secondary" onclick="continueAsGuest()">👤 Continue as Guest</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         AUTH MODAL  (z-index: 300 — above auth-gate)
+    ══════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="modal-auth">
+        <div class="modal-box" style="max-width:440px;">
+            <button class="modal-close" onclick="closeAuthModal()">✕</button>
+
+            <div class="auth-tabs" id="auth-tabs">
+                <button class="auth-tab active" onclick="switchAuthTab('login')">Sign In</button>
+                <button class="auth-tab"        onclick="switchAuthTab('register')">Register</button>
+            </div>
+
+            <!-- LOGIN -->
+            <div class="auth-form-section active" id="auth-login">
+                <div class="auth-input-group">
+                    <label>Email</label>
+                    <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email">
+                </div>
+                <div class="auth-input-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+                </div>
+                <div class="auth-error" id="login-error"></div>
+                <button class="btn" style="width:100%;margin-bottom:12px;" onclick="handleLogin()">Sign In →</button>
+                <div style="text-align:center;">
+                    <button style="background:none;border:none;color:var(--accent-color);font-size:0.85rem;cursor:pointer;font-weight:600;" onclick="switchAuthTab('forgot')">Forgot password?</button>
+                </div>
+            </div>
+
+            <!-- REGISTER -->
+            <div class="auth-form-section" id="auth-register">
+                <div class="auth-input-group">
+                    <label>Full Name</label>
+                    <input type="text" id="register-name" placeholder="Your Name" autocomplete="name">
+                </div>
+                <div class="auth-input-group">
+                    <label>Email</label>
+                    <input type="email" id="register-email" placeholder="you@example.com" autocomplete="email">
+                </div>
+                <div class="auth-input-group">
+                    <label>Password <span style="color:var(--text-secondary);font-size:0.75rem;font-weight:400;">(min 8 chars)</span></label>
+                    <div class="pw-show-toggle">
+                        <input type="password" id="register-password" placeholder="Min 8 characters" autocomplete="new-password" oninput="updatePwStrength(this.value, 'register')">
+                        <button class="pw-eye-btn" type="button" onclick="togglePwVisibility('register-password', this)" tabindex="-1">&#x1F441;</button>
+                    </div>
+                    <div class="pw-strength-bar" id="pw-bar-register">
+                        <div class="pw-seg" id="pw-seg-1"></div>
+                        <div class="pw-seg" id="pw-seg-2"></div>
+                        <div class="pw-seg" id="pw-seg-3"></div>
+                        <div class="pw-seg" id="pw-seg-4"></div>
+                    </div>
+                    <div class="pw-strength-label" id="pw-label-register"></div>
+                </div>
+                <div class="auth-error"   id="register-error"></div>
+                <div class="auth-success" id="register-success"></div>
+                <button class="btn" style="width:100%;" onclick="handleRegister()">Create Account →</button>
+            </div>
+
+            <!-- OTP VERIFICATION -->
+            <!-- <div class="auth-form-section" id="auth-otp">
+                <div style="text-align:center;margin-bottom:16px;">
+                    <div style="font-size:2rem;margin-bottom:8px;">📧</div>
+                    <h3 style="margin-bottom:6px;">Check your email</h3>
+                    <p id="otp-desc" style="color:var(--text-secondary);font-size:0.88rem;">Enter the 6-digit code we sent to your email.</p>
+                </div> -->
+
+                <!-- DEV HINT: visible only when Brevo not configured -->
+                <!-- <div class="otp-dev-hint" id="otp-dev-hint">
+                    <strong>Dev mode (no email sent):</strong> Check your <strong>uvicorn terminal</strong> for a line like:<br>
+                    <code>[DEV OTP] your@email.com (email_verify): 123456</code><br>
+                    Copy that 6-digit code and enter it here.
+                </div> -->
+<!-- 
+                <div class="otp-inputs">
+                    <input class="otp-digit" maxlength="1" type="text" inputmode="numeric" id="otp0">
+                    <input class="otp-digit" maxlength="1" type="text" inputmode="numeric" id="otp1">
+                    <input class="otp-digit" maxlength="1" type="text" inputmode="numeric" id="otp2">
+                    <input class="otp-digit" maxlength="1" type="text" inputmode="numeric" id="otp3">
+                    <input class="otp-digit" maxlength="1" type="text" inputmode="numeric" id="otp4">
+                    <input class="otp-digit" maxlength="1" type="text" inputmode="numeric" id="otp5">
+                </div>
+                <div class="auth-error"   id="otp-error"></div>
+                <div class="auth-success" id="otp-success"></div>
+                <button class="btn" style="width:100%;margin-bottom:12px;" onclick="handleVerifyOTP()">Verify Code →</button>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <button style="background:none;border:none;color:var(--text-secondary);font-size:0.82rem;cursor:pointer;" onclick="switchAuthTab('login')">← Back to Sign In</button>
+                    <button style="background:none;border:none;color:var(--text-secondary);font-size:0.82rem;cursor:pointer;" onclick="handleResendOTP()">Resend code</button>
+                </div>
+            </div> -->
+
+            <!-- FORGOT PASSWORD -->
+            <div class="auth-form-section" id="auth-forgot">
+                <div style="margin-bottom:20px;">
+                    <h3 style="margin-bottom:6px;">Reset Password</h3>
+                    <p style="color:var(--text-secondary);font-size:0.88rem;">Enter your email and we'll send a reset link.</p>
+                </div>
+                <div class="auth-input-group">
+                    <label>Email</label>
+                    <input type="email" id="forgot-email" placeholder="you@example.com">
+                </div>
+                <div class="auth-error"   id="forgot-error"></div>
+                <div class="auth-success" id="forgot-success"></div>
+                <button class="btn" style="width:100%;margin-bottom:12px;" onclick="handleForgotPassword()">Send Reset Link →</button>
+                <div style="text-align:center;">
+                    <button style="background:none;border:none;color:var(--text-secondary);font-size:0.82rem;cursor:pointer;" onclick="switchAuthTab('login')">← Back to Sign In</button>
+                </div>
+            </div>
+
+            <!-- RESET PASSWORD -->
+            <div class="auth-form-section" id="auth-reset">
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+                    <button style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:0.9rem;font-weight:600;padding:0;" onclick="switchAuthTab('login'); document.getElementById('auth-tabs').style.display='';">←</button>
+                    <h3 style="margin:0;">Create New Password</h3>
+                </div>
+                <div style="background:rgba(124,77,255,0.08);border:1px solid rgba(124,77,255,0.2);border-radius:10px;padding:12px 14px;margin-bottom:18px;font-size:0.82rem;color:rgba(255,255,255,0.7);line-height:1.5;">
+                    🔒 You're securely authenticated via your reset link. Enter your new password below.
+                </div>
+                <div class="auth-input-group">
+                    <label>New Password</label>
+                    <div class="pw-show-toggle">
+                        <input type="password" id="new-password" placeholder="Min 8 characters" minlength="8" autocomplete="new-password" oninput="updatePwStrength(this.value, 'reset')">
+                        <button class="pw-eye-btn" type="button" onclick="togglePwVisibility('new-password', this)" tabindex="-1">👁</button>
+                    </div>
+                    <div class="pw-strength-bar" id="pw-bar-reset">
+                        <div class="pw-seg" id="pw-seg-r1"></div>
+                        <div class="pw-seg" id="pw-seg-r2"></div>
+                        <div class="pw-seg" id="pw-seg-r3"></div>
+                        <div class="pw-seg" id="pw-seg-r4"></div>
+                    </div>
+                    <div class="pw-strength-label" id="pw-label-reset"></div>
+                </div>
+                <div class="auth-input-group">
+                    <label>Confirm New Password</label>
+                    <div class="pw-show-toggle">
+                        <input type="password" id="confirm-password" placeholder="Repeat your new password" autocomplete="new-password">
+                        <button class="pw-eye-btn" type="button" onclick="togglePwVisibility('confirm-password', this)" tabindex="-1">👁</button>
+                    </div>
+                </div>
+                <div class="auth-error"   id="reset-error"></div>
+                <div class="auth-success" id="reset-success"></div>
+                <button class="btn" style="width:100%;" onclick="handleResetPassword()">Set New Password →</button>
+                <div style="text-align:center;margin-top:12px;">
+                    <span style="font-size:0.76rem;color:var(--text-secondary);">Password will be updated in your Supabase account</span>
+                </div>
+            </div>
+
+            <div class="guest-divider" id="guest-divider"><span>or continue as</span></div>
+            <button id="guest-btn" class="btn btn-secondary" style="width:100%;" onclick="continueAsGuest()">
+                👤 Guest (no account needed)
+            </button>
+        </div>
+    </div>
+
+    <!-- ── DASHBOARD MODAL (full-screen panel) ── -->
+    <div class="modal-overlay" id="modal-dashboard" style="align-items:flex-start;padding:0;">
+        <div class="modal-box" style="max-width:940px;width:100%;max-height:100vh;border-radius:0 0 20px 20px;padding:24px 28px 40px;margin-top:0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:1.5rem;">📊</span>
+                    <div class="modal-title" style="margin:0;">Performance Dashboard</div>
+                </div>
+                <button class="modal-close" onclick="closeModal('modal-dashboard')" style="position:static;font-size:1.2rem;">✕</button>
+            </div>
+            <p class="modal-subtitle" style="margin-bottom:20px;">Track your progress, view past sessions, and analyze your growth across all modes.</p>
+            <div id="dashboard-content">
+                <div style="text-align:center;padding:60px;color:var(--text-secondary);">
+                    <span class="loader" style="width:36px;height:36px;"></span>
+                    <p style="margin-top:16px;">Loading your analytics...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- ── SESSION DETAIL MODAL ── -->
+    <div class="modal-overlay" id="modal-session-detail" style="align-items:flex-start;padding:0;">
+        <div class="modal-box" style="max-width:860px;width:100%;max-height:100vh;border-radius:0 0 20px 20px;padding:24px 28px 40px;margin-top:0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:1.5rem;">🧠</span>
+                    <div class="modal-title" style="margin:0;">Session Review</div>
+                </div>
+                <button class="modal-close" onclick="closeModal('modal-session-detail')" style="position:static;font-size:1.2rem;">✕</button>
+            </div>
+            <p class="modal-subtitle" style="margin-bottom:20px;">Complete Q&amp;A breakdown, scores, and AI feedback for this interview session.</p>
+            <div id="session-detail-content">
+                <div style="text-align:center;padding:60px;color:var(--text-secondary);">
+                    <span class="loader" style="width:36px;height:36px;"></span>
+                    <p style="margin-top:16px;">Loading session details...</p>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- ── MODAL: HR Practice ── -->
     <div class="modal-overlay" id="modal-hr">
         <div class="modal-box">
             <button class="modal-close" onclick="closeModal('modal-hr')">✕</button>
             <div class="modal-title">🎯 HR / Behavioral Practice</div>
-            <p class="modal-subtitle">Sharpen your soft skills with curated behavioral questions from our database — no resume needed.</p>
-
+            <p class="modal-subtitle">Sharpen your soft skills with curated behavioral questions — no resume needed.</p>
             <span class="modal-section-label">Number of Questions</span>
-            <input type="number" id="hr-count" min="1" max="20" value="5" style="margin-bottom: 6px;">
-            <input type="range" id="hr-range" min="1" max="20" value="5" class="range-slider" style="margin-bottom: 20px;">
-
+            <input type="number" id="hr-count" min="1" max="20" value="5" style="margin-bottom:6px;">
+            <input type="range"  id="hr-range"  min="1" max="20" value="5" class="range-slider" style="margin-bottom:20px;">
             <span class="modal-section-label">Difficulty Level</span>
-            <div class="difficulty-pills" id="hr-difficulty-pills" style="margin-bottom: 20px;">
+            <div class="difficulty-pills" id="hr-difficulty-pills" style="margin-bottom:20px;">
                 <button class="difficulty-pill active" data-value="easy">Easy</button>
                 <button class="difficulty-pill" data-value="medium">Medium</button>
                 <button class="difficulty-pill" data-value="hard">Hard</button>
                 <button class="difficulty-pill" data-value="mixed">Mixed</button>
             </div>
-
-            <div class="toggle-wrapper" style="margin-bottom: 20px;">
+            <div class="toggle-wrapper" style="margin-bottom:20px;">
                 <div>
-                    <span style="font-weight: 600; display: block;">Enable Timer</span>
-                    <span style="font-size: 0.8rem; color: var(--text-secondary);">2 min per question</span>
+                    <span style="font-weight:600;display:block;">Enable Timer</span>
+                    <span style="font-size:0.8rem;color:var(--text-secondary);">2 min per question</span>
                 </div>
-                <label class="switch">
-                    <input type="checkbox" id="hr-timer">
-                    <span class="slider"></span>
-                </label>
+                <label class="switch"><input type="checkbox" id="hr-timer"><span class="slider"></span></label>
             </div>
-            <div class="toggle-wrapper" style="margin-bottom: 28px;">
+            <div class="toggle-wrapper" style="margin-bottom:28px;">
                 <div>
-                    <span style="font-weight: 600; display: block;">Enable Voice Mode</span>
-                    <span style="font-size: 0.8rem; color: var(--text-secondary);">Hear questions & speak answers</span>
+                    <span style="font-weight:600;display:block;">Enable Voice Mode</span>
+                    <span style="font-size:0.8rem;color:var(--text-secondary);">Hear questions &amp; speak answers</span>
                 </div>
-                <label class="switch">
-                    <input type="checkbox" id="hr-voice">
-                    <span class="slider"></span>
-                </label>
+                <label class="switch"><input type="checkbox" id="hr-voice"><span class="slider"></span></label>
             </div>
-
             <button class="btn" onclick="startHRInterview()">Start HR Practice →</button>
         </div>
     </div>
@@ -218,60 +514,50 @@
         <div class="modal-box">
             <button class="modal-close" onclick="closeModal('modal-role')">✕</button>
             <div class="modal-title">💼 Practice by Role</div>
-            <p class="modal-subtitle">Pick your target role and get curated technical questions from our database — instantly, no resume needed.</p>
-
+            <p class="modal-subtitle">Pick your target role and get curated technical questions — no resume needed.</p>
             <span class="modal-section-label">Select Role</span>
-            <select class="role-select" id="role-select">
-                <option value="">Loading roles…</option>
-            </select>
-
+            <select class="role-select" id="role-select"><option value="">Loading roles…</option></select>
             <span class="modal-section-label">Number of Questions</span>
-            <input type="number" id="role-count" min="1" max="20" value="5" style="margin-bottom: 6px;">
-            <input type="range" id="role-range" min="1" max="20" value="5" class="range-slider" style="margin-bottom: 20px;">
-
+            <input type="number" id="role-count" min="1" max="20" value="5" style="margin-bottom:6px;">
+            <input type="range"  id="role-range"  min="1" max="20" value="5" class="range-slider" style="margin-bottom:20px;">
             <span class="modal-section-label">Difficulty Level</span>
-            <div class="difficulty-pills" id="role-difficulty-pills" style="margin-bottom: 20px;">
+            <div class="difficulty-pills" id="role-difficulty-pills" style="margin-bottom:20px;">
                 <button class="difficulty-pill" data-value="easy">Easy</button>
                 <button class="difficulty-pill" data-value="medium">Medium</button>
                 <button class="difficulty-pill" data-value="hard">Hard</button>
                 <button class="difficulty-pill active" data-value="mixed">Mixed</button>
             </div>
-
-            <div class="toggle-wrapper" style="margin-bottom: 20px;">
-                <div>
-                    <span style="font-weight: 600; display: block;">Enable Timer</span>
-                    <span style="font-size: 0.8rem; color: var(--text-secondary);">2 min per question</span>
-                </div>
-                <label class="switch">
-                    <input type="checkbox" id="role-timer">
-                    <span class="slider"></span>
-                </label>
+            <div class="toggle-wrapper" style="margin-bottom:20px;">
+                <div><span style="font-weight:600;display:block;">Enable Timer</span></div>
+                <label class="switch"><input type="checkbox" id="role-timer"><span class="slider"></span></label>
             </div>
-            <div class="toggle-wrapper" style="margin-bottom: 28px;">
-                <div>
-                    <span style="font-weight: 600; display: block;">Enable Voice Mode</span>
-                </div>
-                <label class="switch">
-                    <input type="checkbox" id="role-voice">
-                    <span class="slider"></span>
-                </label>
+            <div class="toggle-wrapper" style="margin-bottom:28px;">
+                <div><span style="font-weight:600;display:block;">Enable Voice Mode</span></div>
+                <label class="switch"><input type="checkbox" id="role-voice"><span class="slider"></span></label>
             </div>
-
             <button class="btn" onclick="startRoleInterview()">Start Role Practice →</button>
         </div>
     </div>
 
     <div class="container">
-        <header>
-            <h1>InterviewAI.</h1>
-            <p>Elevate your career with AI-powered mock interviews.</p>
-        </header>
+        <!-- AUTH HEADER -->
+        <div class="interview-header">
+            <h1 style="font-size:1.4rem;font-weight:800;">InterviewAI.</h1>
+            <div id="auth-header-area">
+                <button class="auth-header-btn" onclick="openAuthModal('login')" id="signin-header-btn">Sign In</button>
+            </div>
+        </div>
 
-        <!-- ── STEP 0: MODE SELECTION ──────────────────────────── -->
+        <!-- GUEST NOTICE -->
+        <div id="guest-notice" style="display:none;background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.25);border-radius:12px;padding:14px 20px;margin-bottom:20px;font-size:0.85rem;color:#ffc107;">
+            ⚠️ You are in <strong>Guest mode</strong> — Resume + JD practice requires a free account.
+            <button onclick="openAuthModal('register')" style="background:none;border:none;color:#ffc107;font-weight:700;cursor:pointer;text-decoration:underline;font-size:0.85rem;margin-left:4px;">Create one free →</button>
+        </div>
+
+        <!-- STEP 0: MODE SELECTION -->
         <div id="step-mode" class="card step-content">
-            <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 6px;">Choose Your Practice Mode</h2>
-            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 24px;">Select how you want to prepare for your interview.</p>
-
+            <h2 style="font-size:1.25rem;font-weight:700;margin-bottom:6px;">Choose Your Practice Mode</h2>
+            <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:24px;">Select how you want to prepare for your interview.</p>
             <div class="mode-grid">
                 <div class="mode-card" onclick="openModal('modal-hr')">
                     <span class="mode-badge">No Resume</span>
@@ -279,14 +565,12 @@
                     <h3>HR / Behavioral</h3>
                     <p>Practice common HR and behavioral questions with instant AI feedback.</p>
                 </div>
-
-                <div class="mode-card" onclick="showSetupStep()">
+                <div class="mode-card" id="resume-jd-card" onclick="handleResumeCardClick()">
                     <span class="mode-badge">Full AI</span>
                     <span class="mode-icon">📄</span>
                     <h3>Resume + JD</h3>
                     <p>Upload your resume and job description for a fully personalized interview.</p>
                 </div>
-
                 <div class="mode-card" onclick="openModal('modal-role')">
                     <span class="mode-badge">No Resume</span>
                     <span class="mode-icon">💼</span>
@@ -296,27 +580,43 @@
             </div>
         </div>
 
-        <!-- ── STEP 1: SETUP (Resume+JD mode) ─────────────────── -->
+        <!-- STEP 1: SETUP -->
         <div id="step-setup" class="card step-content hidden">
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
                 <button onclick="showModeStep()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:0.9rem;font-weight:600;padding:0;">← Back</button>
-                <h2 style="font-size: 1.1rem; font-weight: 700;">📄 Resume + Job Description</h2>
+                <h2 style="font-size:1.1rem;font-weight:700;">📄 Resume + Job Description</h2>
             </div>
 
-            <!-- <div style="margin-bottom: 24px;">
-                <label class="form-label" for="job-role-input">Job Role / Job Title</label>
-                <input type="text" id="job-role-input" placeholder="e.g. Software Engineer, Product Manager" autocomplete="off">
-                <div id="job-role-error" style="color: rgba(255,80,80,0.9); font-size:0.85rem; max-height:0; opacity:0; overflow:hidden; transition: max-height 0.3s, opacity 0.3s;">
-                    ⚠️ Please enter a job role to start the interview.
+            <!-- EXPERIENCE LEVEL TOGGLE -->
+            <div style="margin-bottom:24px;">
+                <label class="form-label">Experience Level</label>
+                <div class="exp-toggle-row">
+                    <button class="exp-toggle-btn" id="exp-fresher-btn" onclick="setExperienceLevel('fresher')">🎓 Fresher</button>
+                    <button class="exp-toggle-btn active" id="exp-experienced-btn" onclick="setExperienceLevel('experienced')">💼 Experienced</button>
                 </div>
-            </div> -->
+                <div class="exp-years-row visible" id="exp-years-row">
+                    <select class="exp-years-select" id="exp-years-select">
+                        <option value="1">1 year</option>
+                        <option value="2" selected>2 years</option>
+                        <option value="3">3 years</option>
+                        <option value="4">4 years</option>
+                        <option value="5">5 years</option>
+                        <option value="6-7">6–7 years</option>
+                        <option value="8-10">8–10 years</option>
+                        <option value="10+">10+ years</option>
+                    </select>
+                </div>
+                <p id="exp-hint" style="font-size:0.78rem;color:var(--text-secondary);margin-top:4px;">
+                    Questions will be tailored to experienced professionals with production system knowledge.
+                </p>
+            </div>
 
-            <div style="margin-bottom: 24px;">
+            <div style="margin-bottom:24px;">
                 <label class="form-label">Job Description <span class="optional-tag">Optional</span></label>
                 <textarea id="jd-input" placeholder="Paste the job description here to tailor your interview..." rows="3"></textarea>
             </div>
 
-            <div style="margin-bottom: 24px;">
+            <div style="margin-bottom:24px;">
                 <label class="form-label">Difficulty Level</label>
                 <div class="difficulty-pills">
                     <button class="difficulty-pill" data-value="easy">Easy</button>
@@ -326,125 +626,117 @@
                 </div>
             </div>
 
-            <div style="margin-bottom: 24px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <label class="form-label" style="margin: 0;">Number of Questions</label>
+            <div style="margin-bottom:24px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <label class="form-label" style="margin:0;">Number of Questions</label>
                     <label class="ai-toggle-label">
                         <input type="checkbox" id="ai-optimized-toggle">
                         <span class="ai-toggle-badge">✨ AI Optimized</span>
                     </label>
                 </div>
                 <div id="manual-count-controls">
-                    <input type="number" id="count-input" min="1" max="20" value="5" style="margin-bottom: 10px;">
-                    <input type="range" id="count-range" min="1" max="20" value="5" class="range-slider">
+                    <input type="number" id="count-input" min="1" max="20" value="5" style="margin-bottom:10px;">
+                    <input type="range"  id="count-range"  min="1" max="20" value="5" class="range-slider">
                 </div>
             </div>
 
             <div class="toggle-wrapper">
                 <div>
-                    <span style="font-weight: 600; display: block;">Enable Voice Mode</span>
-                    <span style="font-size: 0.8rem; color: var(--text-secondary);">Hear questions and speak answers</span>
+                    <span style="font-weight:600;display:block;">Enable Voice Mode</span>
+                    <span style="font-size:0.8rem;color:var(--text-secondary);">Hear questions and speak answers</span>
                 </div>
-                <label class="switch">
-                    <input type="checkbox" id="voice-toggle">
-                    <span class="slider"></span>
-                </label>
+                <label class="switch"><input type="checkbox" id="voice-toggle"><span class="slider"></span></label>
             </div>
-
-            <div class="toggle-wrapper" style="margin-bottom: 28px;">
+            <div class="toggle-wrapper" style="margin-bottom:28px;">
                 <div>
-                    <span style="font-weight: 600; display: block;">Enable Timer</span>
-                    <span style="font-size: 0.8rem; color: var(--text-secondary);">Limit time per question (2 min)</span>
+                    <span style="font-weight:600;display:block;">Enable Timer</span>
+                    <span style="font-size:0.8rem;color:var(--text-secondary);">Limit time per question (2 min)</span>
                 </div>
-                <label class="switch">
-                    <input type="checkbox" id="timer-toggle">
-                    <span class="slider"></span>
-                </label>
+                <label class="switch"><input type="checkbox" id="timer-toggle"><span class="slider"></span></label>
             </div>
 
-            <div id="drop-zone" class="file-upload">
-                <div id="file-info">
-                    <svg style="width:48px;height:48px;color:var(--accent-color);margin-bottom:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                    </svg>
-                    <p>Click or drag your resume here</p>
-                    <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">PDF, DOCX, or TXT (Max 10 MB)</p>
+            <div class="resume-upload-wrapper">
+                <div class="file-upload" id="file-upload">
+                    <div id="upload-loader" class="upload-loader hidden">
+                        <div class="upload-loader-spinner"></div>
+                        <div class="upload-loader-text">Parsing your resume<span class="upload-loader-dots"></span></div>
+                        <p style="font-size:0.78rem;color:var(--text-secondary);margin:0;">Extracting text and skills — this may take a few seconds</p>
+                    </div>
+                    <div id="upload-content">
+                        <div style="font-size:2rem;margin-bottom:12px;">📄</div>
+                        <h3 style="margin-bottom:8px;">Upload Your Resume</h3>
+                        <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:0;">PDF, DOCX, or TXT supported</p>
+                        <div id="file-name"></div>
+                    </div>
+                    <input type="file" id="resume-file" accept=".pdf,.doc,.docx,.txt" hidden>
                 </div>
-                <input type="file" id="resume-upload" hidden accept=".pdf,.docx,.txt">
             </div>
 
-            <button id="start-btn" class="btn">Start Interview</button>
+            <button class="btn" id="start-btn" disabled>Start Interview →</button>
         </div>
 
-        <!-- ── STEP 2: LOADING ──────────────────────────────────── -->
+        <!-- STEP 2: LOADING -->
         <div id="step-loading" class="card step-content hidden" style="text-align:center;padding:60px 40px;">
             <span class="loader"></span>
             <h2 id="loading-text">Generating your questions…</h2>
             <p style="color:var(--text-secondary);margin-top:10px;">Our AI is tailoring the perfect interview for you.</p>
         </div>
 
-        <!-- ── STEP 3: INTERVIEW ────────────────────────────────── -->
+        <!-- STEP 3: INTERVIEW -->
         <div id="step-interview" class="card step-content hidden">
-            <div class="progress-bar" style="margin-bottom:12px;">
-                <div id="progress-fill" class="progress-inner"></div>
-            </div>
+            <div class="progress-bar" style="margin-bottom:12px;"><div id="progress-fill" class="progress-inner"></div></div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
                 <span id="q-counter" style="font-size:0.85rem;color:var(--text-secondary);font-weight:600;">Question 1 of 5</span>
                 <span id="timer-display" style="font-weight:800;color:var(--accent-color);display:none;">02:00</span>
             </div>
-
             <div class="question-container">
                 <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
                     <span id="q-tag" class="question-tag tag-technical">Technical</span>
                     <span id="q-diff-badge" class="diff-badge diff-medium">Medium</span>
                 </div>
                 <h2 id="current-question" style="line-height:1.4;margin-bottom:20px;">Loading question…</h2>
-
                 <div id="voice-controls" style="display:none;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
                     <button id="read-question-btn" class="btn btn-secondary" style="flex:0 0 auto;padding:10px 16px;">🔊 Read Question</button>
                     <button id="record-answer-btn" class="btn btn-secondary" style="flex:1;padding:10px;">🎤 Start Recording</button>
                 </div>
             </div>
-
             <div style="position:relative;">
                 <textarea id="answer-input" placeholder="Type your answer here…" rows="8" style="margin-bottom:8px;"></textarea>
                 <div id="editor-badge" class="hidden" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.06);border:1px solid var(--glass-border);padding:3px 10px;border-radius:6px;font-size:0.7rem;font-weight:700;text-transform:uppercase;color:var(--text-secondary);pointer-events:none;">Editor Mode</div>
             </div>
             <p id="char-count" style="font-size:0.8rem;color:var(--text-secondary);text-align:right;margin-bottom:24px;">0 characters</p>
-
             <div class="nav-controls">
                 <button id="prev-btn" class="btn btn-secondary" style="width:auto;padding:15px 28px;" disabled>← Previous</button>
                 <button id="submit-answer-btn" class="btn" style="flex:1;">Next Question →</button>
             </div>
         </div>
 
-        <!-- ── STEP 4: EVALUATING ───────────────────────────────── -->
+        <!-- STEP 4: EVALUATING -->
         <div id="step-evaluating" class="card step-content hidden" style="text-align:center;padding:60px 40px;">
             <span class="loader"></span>
             <h2>Evaluating your answers…</h2>
-            <p style="color:var(--text-secondary);margin-top:10px;">All responses are currently under careful evaluation—just a little longer to go, you're almost there! </p>
+            <p style="color:var(--text-secondary);margin-top:10px;">All responses are being evaluated — just a little longer!</p>
         </div>
 
-        <!-- ── STEP 5: RESULTS ──────────────────────────────────── -->
+        <!-- STEP 5: RESULTS -->
         <div id="step-results" class="card step-content hidden">
             <div style="text-align:center;margin-bottom:32px;">
                 <div class="score-circle"><span id="avg-score">0</span></div>
                 <h2>Interview Complete! 🎉</h2>
                 <p id="results-mode-label" style="color:var(--text-secondary);margin-top:8px;">Here is how you performed.</p>
             </div>
-
             <div id="stats-grid" class="stats-grid" style="margin-bottom:32px;"></div>
             <div id="resume-match-container" style="display:none;margin-bottom:32px;"></div>
             <div id="feedback-list"></div>
-
             <div class="nav-controls" style="margin-top:16px;">
                 <button onclick="location.reload()" class="btn">Try Another Mode</button>
-                <a href="index.html" class="btn btn-secondary" style="text-align:center;padding:15px;">🏠 Go to Home</a>
+                <button onclick="openDashboard()" class="btn btn-secondary" style="padding:15px 24px;">📊 View Analytics</button>
+                <a href="index.html" class="btn btn-secondary" style="text-align:center;padding:15px;">🏠 Home</a>
             </div>
         </div>
     </div>
 
+    <script src="auth.js"></script>
     <script src="main.js"></script>
 </body>
-
 </html>
